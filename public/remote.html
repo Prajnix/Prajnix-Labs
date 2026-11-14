@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Presenter Clicker Remote | PraJniX Labs</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+    body { font-family: 'Inter', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4 font-sans select-none">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between border-b border-slate-800 pb-3">
+    <div class="flex items-center space-x-2">
+      <div class="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white text-xs">P</div>
+      <span class="font-extrabold text-white text-sm">Presenter <span class="text-indigo-400 font-normal">Remote</span></span>
+    </div>
+    <div class="flex items-center space-x-2">
+      <span id="remotePinBadge" class="text-xs font-mono font-bold bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-full text-indigo-400">PIN: ------</span>
+      <span id="remoteOnlineBadge" class="text-xs font-mono font-bold text-emerald-400">🟢 1</span>
+    </div>
+  </header>
+
+  <!-- Live Slide Monitor Card -->
+  <main class="my-auto space-y-4 max-w-sm mx-auto w-full">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3 shadow-2xl text-center">
+      <div class="flex items-center justify-between">
+        <span id="remoteSlideBadge" class="text-[11px] font-mono uppercase font-extrabold text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg">
+          Slide 1 of 2
+        </span>
+        <span id="remoteStatusBadge" class="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400">
+          DRAFT
+        </span>
+      </div>
+      <h2 id="remoteQuestionText" class="text-lg font-black text-white leading-snug line-clamp-2">
+        Connecting to session...
+      </h2>
+      <div class="flex items-center justify-center space-x-4 text-xs font-mono text-slate-400 pt-1">
+        <span id="remoteVoteCount">👥 0 Responses</span>
+      </div>
+    </div>
+
+    <!-- GIANT PRIMARY CLICKER CONTROLS -->
+    <div class="grid grid-cols-2 gap-3">
+      <button
+        onclick="prevSlide()"
+        class="py-8 bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-800 rounded-3xl font-black text-xl text-white shadow-xl flex flex-col items-center justify-center space-y-1 cursor-pointer transition"
+      >
+        <span>←</span>
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Previous</span>
+      </button>
+
+      <button
+        onclick="nextSlide()"
+        class="py-8 bg-indigo-600 hover:bg-indigo-500 active:scale-95 border border-indigo-500 rounded-3xl font-black text-xl text-white shadow-xl shadow-indigo-600/25 flex flex-col items-center justify-center space-y-1 cursor-pointer transition"
+      >
+        <span>→</span>
+        <span class="text-xs font-bold uppercase tracking-wider text-indigo-100">Next Slide</span>
+      </button>
+    </div>
+
+    <!-- SECONDARY STAGE ACTIONS -->
+    <div class="grid grid-cols-2 gap-2.5">
+      <button
+        id="remoteToggleVotingBtn"
+        onclick="toggleVoting()"
+        class="py-3.5 px-3 bg-slate-900 border border-slate-800 hover:border-emerald-500 rounded-2xl text-xs font-extrabold text-white active:scale-95 transition cursor-pointer"
+      >
+        ▶ Start Voting
+      </button>
+
+      <button
+        id="remoteRevealBtn"
+        onclick="toggleHideResults()"
+        class="py-3.5 px-3 bg-slate-900 border border-slate-800 hover:border-amber-500 rounded-2xl text-xs font-extrabold text-white active:scale-95 transition cursor-pointer"
+      >
+        👁️ Hide Results
+      </button>
+
+      <button
+        onclick="startRemoteTimer(30)"
+        class="py-3 px-3 bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-2xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+      >
+        ⏱️ 30s Timer
+      </button>
+
+      <button
+        onclick="triggerRemoteConfetti()"
+        class="py-3 px-3 bg-purple-500/10 border border-purple-500/25 text-purple-400 rounded-2xl text-xs font-extrabold active:scale-95 transition cursor-pointer"
+      >
+        🎉 Confetti
+      </button>
+    </div>
+  </main>
+
+  <footer class="text-center text-[11px] text-slate-600 pt-3 border-t border-slate-900">
+    PraJniX Authenticated Controller
+  </footer>
+
+  <script>
+    function triggerHaptic(type = 'light') {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        if (type === 'heavy') navigator.vibrate([35, 40, 35]);
+        else navigator.vibrate(20);
+      }
+    }
+
+    const socket = io();
+    const params = new URLSearchParams(window.location.search);
+    const pin = params.get('pin');
+    const hostKey = params.get('key') || '';
+    let currentSession = null;
+
+    if (!pin) {
+      const manual = prompt('Enter 6-digit Session PIN for Remote:');
+      if (manual) window.location.href = `/remote?pin=${manual.trim()}`;
+    } else {
+      document.getElementById('remotePinBadge').textContent = `PIN: ${pin}`;
+      socket.emit('join_session', pin);
+
+      socket.on('room_count', (c) => {
+        document.getElementById('remoteOnlineBadge').textContent = `🟢 ${c}`;
+      });
+
+      socket.on('session_update', (s) => {
+        currentSession = s;
+        const slide = s.slides[s.currentSlideIndex] || s.slides[0];
+        document.getElementById('remoteSlideBadge').textContent = `Slide ${s.currentSlideIndex + 1} of ${s.slides.length}`;
+        document.getElementById('remoteStatusBadge').textContent = s.status;
+        document.getElementById('remoteQuestionText').textContent = slide ? slide.question : 'Untitled Slide';
+
+        const count = slide ? (slide.type === 'WORD_CLOUD' ? slide.words?.length : slide.type === 'QA' ? slide.questions?.length : slide.responses?.length) : 0;
+        document.getElementById('remoteVoteCount').textContent = `👥 ${count || 0} Responses`;
+
+        const vBtn = document.getElementById('remoteToggleVotingBtn');
+        if (s.status === 'LIVE') {
+          vBtn.textContent = '⏸ Pause Voting';
+          vBtn.className = 'py-3.5 px-3 bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-2xl text-xs font-extrabold active:scale-95 transition cursor-pointer';
+        } else {
+          vBtn.textContent = '▶ Start Voting';
+          vBtn.className = 'py-3.5 px-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-2xl text-xs font-extrabold active:scale-95 transition cursor-pointer';
+        }
+
+        const rBtn = document.getElementById('remoteRevealBtn');
+        if (s.hideResults) {
+          rBtn.textContent = '✨ Reveal Results';
+          rBtn.className = 'py-3.5 px-3 bg-amber-500 text-slate-950 font-black rounded-2xl text-xs active:scale-95 transition cursor-pointer';
+        } else {
+          rBtn.textContent = '👁️ Hide Results';
+          rBtn.className = 'py-3.5 px-3 bg-slate-900 border border-slate-800 text-white rounded-2xl text-xs font-extrabold active:scale-95 transition cursor-pointer';
+        }
+      });
+    }
+
+    function getHeaders() {
+      const h = { 'Content-Type': 'application/json' };
+      if (hostKey) h['x-host-token'] = hostKey;
+      return h;
+    }
+
+    async function nextSlide() {
+      triggerHaptic('medium');
+      if (!currentSession || currentSession.currentSlideIndex >= currentSession.slides.length - 1) return;
+      await fetch(`/api/sessions/${pin}/slide`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ currentSlideIndex: currentSession.currentSlideIndex + 1 })
+      });
+    }
+
+    async function prevSlide() {
+      triggerHaptic('medium');
+      if (!currentSession || currentSession.currentSlideIndex <= 0) return;
+      await fetch(`/api/sessions/${pin}/slide`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ currentSlideIndex: currentSession.currentSlideIndex - 1 })
+      });
+    }
+
+    async function toggleVoting() {
+      triggerHaptic('heavy');
+      if (!currentSession) return;
+      const next = currentSession.status === 'LIVE' ? 'PAUSED' : 'LIVE';
+      await fetch(`/api/sessions/${pin}/status`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: next })
+      });
+    }
+
+    async function toggleHideResults() {
+      triggerHaptic('heavy');
+      if (!currentSession) return;
+      await fetch(`/api/sessions/${pin}/settings`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ hideResults: !currentSession.hideResults })
+      });
+    }
+
+    async function startRemoteTimer(seconds) {
+      triggerHaptic('medium');
+      if (!currentSession) return;
+      await fetch(`/api/sessions/${pin}/timer`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ seconds })
+      });
+    }
+
+    function triggerRemoteConfetti() {
+      triggerHaptic('heavy');
+      socket.emit('trigger_confetti', { pin });
+    }
+  </script>
+</body>
+</html>

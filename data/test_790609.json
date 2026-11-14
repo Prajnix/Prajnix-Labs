@@ -1,0 +1,354 @@
+{
+  "pin": "790609",
+  "title": "test",
+  "status": "PAUSED",
+  "allowMultipleVotes": true,
+  "currentSlideIndex": 0,
+  "createdAt": "2026-10-30T05:37:44.748Z",
+  "slides": [
+    {
+      "id": "slide_1",
+      "type": "RATING_SLIDER",
+      "question": "Q1",
+      "minLabel": "1 = Bad",
+      "maxLabel": "5 = Good",
+      "distribution": {
+        "1": 0,
+        "2": 1,
+        "3": 6,
+        "4": 1,
+        "5": 0
+      },
+      "responses": [
+        {
+          "voterId": "v_3yzhufsy",
+          "rating": 3,
+          "suggestion": "qwe",
+          "timestamp": "2026-10-30T05:53:30.641Z",
+          "id": "resp_0_0_1793454192625"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "rating": 3,
+          "suggestion": "qwewq",
+          "timestamp": "2026-10-30T05:53:57.518Z",
+          "id": "resp_0_1_1793454192625"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "rating": 3,
+          "suggestion": "dcw",
+          "timestamp": "2026-10-30T05:58:40.924Z",
+          "id": "resp_0_2_1793454192625"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "rating": 3,
+          "suggestion": "",
+          "timestamp": "2026-10-30T14:08:19.297Z",
+          "id": "resp_0_3_1793454192625"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "rating": 2,
+          "suggestion": "",
+          "timestamp": "2026-10-30T15:03:22.081Z",
+          "id": "resp_0_4_1793454192625"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "rating": 3,
+          "suggestion": "sfafsa",
+          "timestamp": "2026-10-30T16:00:22.422Z",
+          "id": "resp_0_5_1793454192625"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "rating": 3,
+          "suggestion": "dfda",
+          "timestamp": "2026-10-30T16:51:05.460Z",
+          "id": "resp_0_6_1793454192625"
+        },
+        {
+          "id": "rs_1793544336130_bzgu",
+          "voterId": "v_3yzhufsy",
+          "voterName": "Guest",
+          "voterAvatar": "🦁",
+          "rating": 4,
+          "suggestion": "godd",
+          "timestamp": "2026-11-01T14:45:36.130Z"
+        }
+      ],
+      "words": [],
+      "questions": [],
+      "options": [
+        {
+          "id": "opt_1_0",
+          "text": "Option A",
+          "votes": 0,
+          "isCorrect": false
+        },
+        {
+          "id": "opt_2_0",
+          "text": "Option B",
+          "votes": 0,
+          "isCorrect": false
+        },
+        {
+          "id": "opt_3_0",
+          "text": "Option C",
+          "votes": 0,
+          "isCorrect": false
+        }
+      ],
+      "items": [
+        {
+          "id": "item_1_0",
+          "text": "Speed & Performance"
+        },
+        {
+          "id": "item_2_0",
+          "text": "Ease of Use (UI/UX)"
+        },
+        {
+          "id": "item_3_0",
+          "text": "New Features"
+        }
+      ]
+    },
+    {
+      "id": "slide_1793368941623_204",
+      "type": "MULTIPLE_CHOICE",
+      "question": "Which option do",
+      "minLabel": "1 = Bad",
+      "maxLabel": "5 = Good",
+      "distribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      },
+      "options": [
+        {
+          "id": "opt_1",
+          "text": "A",
+          "votes": 0,
+          "isCorrect": false
+        },
+        {
+          "id": "opt_2",
+          "text": "sagdsad",
+          "votes": 1,
+          "isCorrect": false
+        },
+        {
+          "id": "opt_1793372619805_e9n",
+          "text": "Option C",
+          "votes": 0,
+          "isCorrect": false
+        }
+      ],
+      "items": [],
+      "responses": [
+        {
+          "voterId": "v_3yzhufsy",
+          "optionId": "opt_2",
+          "optionText": "Option B",
+          "timestamp": "2026-10-30T16:51:07.279Z",
+          "id": "resp_1_0_1793454192625"
+        }
+      ],
+      "words": [],
+      "questions": []
+    },
+    {
+      "id": "slide_1793368991104_205",
+      "type": "WORD_CLOUD",
+      "question": "What single word comes to mind?",
+      "minLabel": "1 = Bad",
+      "maxLabel": "5 = Good",
+      "distribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      },
+      "options": [],
+      "items": [],
+      "responses": [],
+      "words": [
+        {
+          "voterId": "v_3yzhufsy",
+          "word": "na",
+          "timestamp": "2026-10-30T14:03:28.438Z"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "word": "aa",
+          "timestamp": "2026-10-30T14:05:07.376Z"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "word": "kj",
+          "timestamp": "2026-10-30T15:03:58.771Z"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "word": "dafad",
+          "timestamp": "2026-10-30T16:00:52.967Z"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "word": "fsafsads",
+          "timestamp": "2026-10-30T16:03:10.195Z"
+        },
+        {
+          "voterId": "v_3yzhufsy",
+          "word": "fdafs",
+          "timestamp": "2026-10-30T16:51:10.954Z"
+        },
+        {
+          "id": "wc_1793544110049_3x37",
+          "voterId": "v_3yzhufsy",
+          "word": "aa",
+          "timestamp": "2026-11-01T14:41:50.049Z"
+        },
+        {
+          "id": "wc_1793544114229_za17",
+          "voterId": "v_3yzhufsy",
+          "word": "aa",
+          "timestamp": "2026-11-01T14:41:54.229Z"
+        }
+      ],
+      "questions": []
+    },
+    {
+      "id": "slide_1793369051742_207",
+      "type": "OPEN_ENDED",
+      "question": "What are your thoughts on this topic?",
+      "minLabel": "1 = Bad",
+      "maxLabel": "5 = Good",
+      "distribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      },
+      "options": [],
+      "items": [],
+      "responses": [
+        {
+          "id": "oe_1793379078090_2m20",
+          "voterId": "v_3yzhufsy",
+          "text": "aasas",
+          "timestamp": "2026-10-30T16:51:18.090Z"
+        },
+        {
+          "id": "oe_1793544142820_a7zq",
+          "voterId": "v_3yzhufsy",
+          "voterName": "Guest",
+          "voterAvatar": "🦁",
+          "text": "i like this more",
+          "timestamp": "2026-11-01T14:42:22.820Z"
+        }
+      ],
+      "words": [],
+      "questions": []
+    },
+    {
+      "id": "slide_1793369054392_208",
+      "type": "RANKING",
+      "question": "Rank these priorities in order:",
+      "minLabel": "1 = Bad",
+      "maxLabel": "5 = Good",
+      "distribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      },
+      "options": [],
+      "items": [
+        {
+          "id": "item_1",
+          "text": "Quality"
+        },
+        {
+          "id": "item_2",
+          "text": "Speed"
+        },
+        {
+          "id": "item_3",
+          "text": "Cost"
+        }
+      ],
+      "responses": [
+        {
+          "voterId": "v_3yzhufsy",
+          "ranking": [
+            "item_2",
+            "item_1",
+            "item_3"
+          ],
+          "timestamp": "2026-10-30T16:51:23.164Z",
+          "id": "resp_4_0_1793454192625"
+        },
+        {
+          "id": "rk_1793544165435_3yd9",
+          "voterId": "v_3yzhufsy",
+          "voterName": "Guest",
+          "voterAvatar": "🦁",
+          "ranking": [
+            "item_3",
+            "item_2",
+            "item_1"
+          ],
+          "timestamp": "2026-11-01T14:42:45.435Z"
+        }
+      ],
+      "words": [],
+      "questions": []
+    },
+    {
+      "id": "slide_1793369086004_209",
+      "type": "QA",
+      "question": "Ask a question for Q&A:",
+      "minLabel": "1 = Bad",
+      "maxLabel": "5 = Good",
+      "distribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      },
+      "options": [],
+      "items": [],
+      "responses": [],
+      "words": [],
+      "questions": [
+        {
+          "id": "q_1793544188453_1o9c",
+          "voterId": "v_3yzhufsy",
+          "voterName": "Guest",
+          "voterAvatar": "🦁",
+          "text": "how are you",
+          "upvotes": 1,
+          "upvotedBy": [
+            "v_3yzhufsy"
+          ],
+          "timestamp": "2026-11-01T14:43:08.454Z"
+        }
+      ]
+    }
+  ],
+  "pacingMode": "HOST",
+  "hideResults": false,
+  "timerEndsAt": null,
+  "timerDuration": 0,
+  "hostToken": "f63a75e4f06bdf43af6bafa1"
+}

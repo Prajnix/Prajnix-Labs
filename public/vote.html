@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Vote | PraJniX Labs</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    body { font-family: 'Inter', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+
+    input[type='range'] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 18px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #f43f5e 0%, #fbbf24 50%, #10b981 100%);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type='range']::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 5px solid #4f46e5;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+      transition: transform 0.15s ease;
+    }
+    input[type='range']::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+    }
+
+    .emoji-hover-bubble {
+      position: absolute;
+      top: -76px;
+      transform: translateX(-50%) translateY(14px) scale(0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), left 0.12s ease;
+      z-index: 30;
+    }
+    .emoji-hover-bubble.show-bubble {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+    .emoji-hover-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -7px;
+      left: 50%;
+      transform: translateX(-50%) rotate(45deg);
+      width: 12px;
+      height: 12px;
+      background: #0f172a;
+      border-right: 2px solid var(--bubble-border, #6366f1);
+      border-bottom: 2px solid var(--bubble-border, #6366f1);
+    }
+
+    #introBackdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      opacity: 1;
+      transition: opacity 0.7s ease;
+      pointer-events: none;
+    }
+    #introBackdrop.fade-out { opacity: 0; }
+
+    #animatedBrandLogo {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(2.1);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      transform-origin: left center;
+      transition:
+        top 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+        left 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    @media (max-width: 640px) {
+      #animatedBrandLogo { transform: translate(-50%, -50%) scale(1.6); }
+    }
+    #animatedBrandLogo.docked-top-left {
+      top: 18px;
+      left: 20px;
+      transform: translate(0, 0) scale(1);
+    }
+
+    @keyframes cardSlideIn {
+      0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .slide-card-anim { animation: cardSlideIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+    @keyframes floatUpVoterEmoji {
+      0% { opacity: 1; transform: translateY(0) scale(0.9); }
+      100% { opacity: 0; transform: translateY(-120px) scale(1.35); }
+    }
+    .voter-fly-emoji {
+      position: fixed;
+      bottom: 70px;
+      right: 32px;
+      font-size: 1.75rem;
+      pointer-events: none;
+      z-index: 50;
+      animation: floatUpVoterEmoji 1s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col justify-between p-4 sm:p-6 pb-20 font-sans overflow-x-hidden transition-colors duration-300 relative">
+
+  <!-- Offline / Reconnecting Banner -->
+  <div id="offlineBanner" class="hidden fixed top-0 inset-x-0 z-50 bg-amber-500 text-slate-950 text-xs font-extrabold py-2 px-4 text-center shadow-md">
+    ⚠️ Reconnecting to live session... Your votes are safe.
+  </div>
+
+  <div id="ambientAura" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] sm:w-[520px] h-[360px] sm:h-[520px] rounded-full blur-[110px] opacity-25 dark:opacity-20 pointer-events-none transition-colors duration-500 bg-indigo-500 z-0"></div>
+  <div id="introBackdrop" class="bg-slate-50 dark:bg-slate-950"></div>
+
+  <div id="animatedBrandLogo" class="select-none">
+    <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center font-black text-white text-base shadow-lg">P</div>
+    <span class="font-extrabold text-slate-900 dark:text-white text-lg tracking-tight">PraJniX <span class="text-indigo-600 dark:text-indigo-400 font-normal">Labs</span></span>
+  </div>
+
+  <header class="w-full max-w-xl mx-auto flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3.5 relative z-10">
+    <div class="h-8 w-36"></div>
+    <div class="flex items-center space-x-2">
+      <button onclick="editVoterProfile()" id="voterProfileBadge" class="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 hover:border-indigo-500 transition cursor-pointer flex items-center space-x-1.5">
+        <span id="voterBadgeAvatar">🦁</span>
+        <span id="voterBadgeName" class="max-w-[70px] sm:max-w-[100px] truncate">Guest</span>
+      </button>
+
+      <span id="onlineVoterBadge" class="hidden text-[11px] font-mono font-bold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full text-emerald-600 dark:text-emerald-400">
+        🟢 1
+      </span>
+      <span id="pinBadge" class="text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-full text-indigo-600 dark:text-indigo-400 shadow-sm">PIN: ------</span>
+      <button id="themeToggleBtn" class="p-2 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 shadow-sm cursor-pointer">
+        <svg class="w-4 h-4 hidden dark:block text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg class="w-4 h-4 block dark:hidden text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="mainVoterContent" class="max-w-xl mx-auto w-full my-auto py-4 sm:py-6 opacity-0 translate-y-4 transition-all duration-700 relative z-10">
+    
+    <!-- Voter Countdown Banner -->
+    <div id="voterTimerWrap" class="hidden mb-4 bg-white dark:bg-slate-900 border border-amber-500/40 rounded-2xl p-3 shadow-md">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] font-extrabold uppercase tracking-wider text-amber-500">⏱️ Time Remaining</span>
+        <span id="voterTimerText" class="font-mono font-black text-sm text-slate-900 dark:text-white">00:30</span>
+      </div>
+      <div class="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+        <div id="voterTimerBar" class="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-300" style="width: 100%"></div>
+      </div>
+    </div>
+
+    <!-- PIN + Profile Entry -->
+    <div id="pinEntry" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 space-y-5 shadow-2xl">
+      <h2 class="text-2xl font-black text-slate-900 dark:text-white text-center">Join Presentation</h2>
+      <form id="pinForm" class="space-y-4">
+        <div>
+          <label class="block text-xs uppercase font-extrabold text-slate-400 mb-1.5 text-center">Presentation PIN</label>
+          <input id="manualPin" type="text" inputmode="numeric" maxlength="6" placeholder="000000" required class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl text-center text-3xl font-mono font-black tracking-widest text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500" />
+        </div>
+        
+        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+          <label class="block text-xs uppercase font-extrabold text-slate-400 text-center">Your Display Profile (Optional)</label>
+          <div class="flex space-x-2">
+            <select id="voterAvatarSelect" class="px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-lg focus:outline-none">
+              <option value="🦁">🦁</option>
+              <option value="🚀">🚀</option>
+              <option value="⚡">⚡</option>
+              <option value="🦊">🦊</option>
+              <option value="🎯">🎯</option>
+              <option value="🦄">🦄</option>
+              <option value="🌟">🌟</option>
+              <option value="👤">👤</option>
+            </select>
+            <input id="voterNameInput" type="text" maxlength="20" placeholder="Your Name or Nickname" class="flex-grow px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none" />
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-extrabold text-sm shadow-lg cursor-pointer">Join Live Session →</button>
+      </form>
+    </div>
+
+    <!-- Waiting Screen -->
+    <div id="waitingState" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
+      <div class="animate-pulse text-5xl">⏳</div>
+      <h2 class="text-2xl font-extrabold text-slate-900 dark:text-white">Get Ready!</h2>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">The poll will appear automatically as soon as the host starts voting.</p>
+    </div>
+
+    <!-- Paused Screen -->
+    <div id="pausedState" class="hidden bg-white dark:bg-slate-900 border-2 border-amber-500/40 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
+      <div class="text-4xl">⏸️</div>
+      <h2 class="text-2xl font-black text-slate-900 dark:text-white">Voting is Paused</h2>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">The host has temporarily paused voting. Hang tight!</p>
+    </div>
+
+    <!-- Closed Screen -->
+    <div id="closedState" class="hidden bg-white dark:bg-slate-900 border-2 border-rose-500/40 rounded-3xl p-8 text-center space-y-4 shadow-2xl">
+      <div class="text-4xl">🛑</div>
+      <h2 class="text-2xl font-black text-slate-900 dark:text-white">Voting Has Been Closed</h2>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Thank you for participating! This voting session has ended.</p>
+    </div>
+
+    <!-- Active Slide Container -->
+    <div id="slideContainer" class="hidden"></div>
+
+    <!-- Completed Summary Screen + Personal Vote History Drawer -->
+    <div id="votedState" class="hidden bg-white dark:bg-slate-900 border border-emerald-500/30 rounded-3xl p-7 sm:p-8 text-center space-y-5 shadow-2xl slide-card-anim">
+      <div class="w-16 h-16 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center mx-auto text-3xl font-black">✓</div>
+      <div class="space-y-1.5">
+        <h3 id="votedStateTitle" class="text-2xl font-black text-slate-900 dark:text-white">All Responses Submitted!</h3>
+        <p id="votedStateDesc" class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Thank you! Watch the main stage for live updates.</p>
+      </div>
+
+      <!-- Voter's Personal Submitted History -->
+      <div id="voterHistoryBox" class="text-left bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-2 max-h-48 overflow-y-auto"></div>
+
+      <div class="space-y-2.5 pt-1">
+        <button id="backToQuestionsBtn" type="button" class="w-full py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-2xl text-xs cursor-pointer">← Review / Back to Questions</button>
+        <button id="voteAgainBtn" type="button" class="hidden w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-2xl text-xs cursor-pointer">🔄 Vote Again</button>
+      </div>
+    </div>
+
+    <p id="statusMsg" class="text-center text-xs font-semibold text-emerald-500 dark:text-emerald-400 mt-4"></p>
+  </main>
+
+  <!-- FLOATING LIVE EMOJI REACTION BAR -->
+  <div id="reactionBar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-full px-4 py-1.5 shadow-xl flex items-center space-x-2">
+    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mr-1 hidden sm:inline">React</span>
+    <button type="button" onclick="sendReaction('❤️')" class="text-lg hover:scale-125 active:scale-90 transition cursor-pointer p-1">❤️</button>
+    <button type="button" onclick="sendReaction('🔥')" class="text-lg hover:scale-125 active:scale-90 transition cursor-pointer p-1">🔥</button>
+    <button type="button" onclick="sendReaction('👏')" class="text-lg hover:scale-125 active:scale-90 transition cursor-pointer p-1">👏</button>
+    <button type="button" onclick="sendReaction('😂')" class="text-lg hover:scale-125 active:scale-90 transition cursor-pointer p-1">😂</button>
+    <button type="button" onclick="sendReaction('🚀')" class="text-lg hover:scale-125 active:scale-90 transition cursor-pointer p-1">🚀</button>
+  </div>
+
+  <footer class="text-center text-xs text-slate-400 dark:text-slate-600 pt-3 border-t border-slate-200/60 dark:border-slate-900 relative z-10">Powered by PraJniX Labs</footer>
+
+  <script>
+    function triggerHaptic(type = 'light') {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        if (type === 'heavy') navigator.vibrate([35, 40, 35]);
+        else if (type === 'medium') navigator.vibrate(25);
+        else navigator.vibrate(12);
+      }
+    }
+
+    function initTheme() {
+      const savedTheme = localStorage.getItem('prajnix_theme') || 'dark';
+      if (savedTheme === 'light') document.documentElement.classList.remove('dark');
+      else document.documentElement.classList.add('dark');
+    }
+    initTheme();
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('prajnix_theme', isDark ? 'dark' : 'light');
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        document.getElementById('animatedBrandLogo').classList.add('docked-top-left');
+        document.getElementById('introBackdrop').classList.add('fade-out');
+        document.getElementById('mainVoterContent').classList.remove('opacity-0', 'translate-y-4');
+      }, 700);
+      setTimeout(() => { document.getElementById('introBackdrop').style.display = 'none'; }, 1450);
+    });
+
+    let socket = null;
+    let activePin = null;
+    let sessionData = null;
+    let voterSlideIndex = 0;
+    let hasInitializedPosition = false;
+    let renderedSlideKey = null;
+    let allowMultiple = false;
+    let currentRankingOrder = [];
+    let voterTimerInterval = null;
+    let lastReactionTime = 0;
+
+    let voterId = localStorage.getItem('prajnix_voter_id');
+    if (!voterId) {
+      voterId = 'v_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('prajnix_voter_id', voterId);
+    }
+
+    let voterName = localStorage.getItem('prajnix_voter_name') || 'Guest';
+    let voterAvatar = localStorage.getItem('prajnix_voter_avatar') || '🦁';
+
+    function updateProfileBadge() {
+      document.getElementById('voterBadgeName').textContent = voterName;
+      document.getElementById('voterBadgeAvatar').textContent = voterAvatar;
+      const inp = document.getElementById('voterNameInput');
+      const sel = document.getElementById('voterAvatarSelect');
+      if (inp) inp.value = voterName === 'Guest' ? '' : voterName;
+      if (sel) sel.value = voterAvatar;
+    }
+    updateProfileBadge();
+
+    window.editVoterProfile = () => {
+      const newName = prompt('Enter your name or nickname:', voterName);
+      if (newName !== null) {
+        voterName = newName.trim() || 'Guest';
+        localStorage.setItem('prajnix_voter_name', voterName);
+        updateProfileBadge();
+      }
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const pinFromUrl = params.get('pin');
+    if (!pinFromUrl) document.getElementById('pinEntry').classList.remove('hidden');
+    else { activePin = pinFromUrl.trim(); initVoter(activePin); }
+
+    document.getElementById('pinForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const p = document.getElementById('manualPin').value.trim();
+      const n = document.getElementById('voterNameInput').value.trim();
+      const a = document.getElementById('voterAvatarSelect').value;
+
+      if (n) { voterName = n; localStorage.setItem('prajnix_voter_name', voterName); }
+      if (a) { voterAvatar = a; localStorage.setItem('prajnix_voter_avatar', voterAvatar); }
+      updateProfileBadge();
+
+      if (p.length === 6) window.location.href = `/vote?pin=${p}`;
+    });
+
+    window.sendReaction = (emoji) => {
+      triggerHaptic('light');
+      const now = Date.now();
+      if (now - lastReactionTime < 350) return;
+      lastReactionTime = now;
+      if (socket && activePin) {
+        socket.emit('send_reaction', { pin: activePin, emoji });
+        const fly = document.createElement('div');
+        fly.className = 'voter-fly-emoji select-none';
+        fly.textContent = emoji;
+        document.body.appendChild(fly);
+        setTimeout(() => fly.remove(), 950);
+      }
+    };
+
+    function syncVoterCountdown(session) {
+      const wrap = document.getElementById('voterTimerWrap');
+      const textEl = document.getElementById('voterTimerText');
+      const barEl = document.getElementById('voterTimerBar');
+
+      if (voterTimerInterval) {
+        clearInterval(voterTimerInterval);
+        voterTimerInterval = null;
+      }
+
+      if (!session || !session.timerEndsAt || session.timerEndsAt <= Date.now()) {
+        wrap.classList.add('hidden');
+        return;
+      }
+
+      wrap.classList.remove('hidden');
+      const totalMs = Math.max(1000, (session.timerDuration || 30) * 1000);
+
+      const tick = () => {
+        const remMs = Math.max(0, session.timerEndsAt - Date.now());
+        const remSec = Math.ceil(remMs / 1000);
+        const mins = String(Math.floor(remSec / 60)).padStart(2, '0');
+        const secs = String(remSec % 60).padStart(2, '0');
+        textEl.textContent = `${mins}:${secs}`;
+        barEl.style.width = `${Math.min(100, (remMs / totalMs) * 100)}%`;
+        if (remMs <= 0) {
+          clearInterval(voterTimerInterval);
+          wrap.classList.add('hidden');
+        }
+      };
+
+      tick();
+      voterTimerInterval = setInterval(tick, 250);
+    }
+
+    function hideAllScreens() {
+      ['waitingState', 'pausedState', 'closedState', 'slideContainer', 'votedState'].forEach((id) => {
+        document.getElementById(id).classList.add('hidden');
+      });
+    }
+
+    function hasVotedOnSlide(pin, slideId) {
+      return Boolean(localStorage.getItem(`voted_${pin}_${slideId}`));
+    }
+
+    function findFirstUnansweredIndex(session) {
+      if (!session || !Array.isArray(session.slides)) return 0;
+      for (let i = 0; i < session.slides.length; i++) {
+        if (session.slides[i].type === 'QA' || !hasVotedOnSlide(session.pin, session.slides[i].id)) {
+          return i;
+        }
+      }
+      return session.slides.length;
+    }
+
+    function renderVoterHistorySummary() {
+      const box = document.getElementById('voterHistoryBox');
+      if (!box || !sessionData || !Array.isArray(sessionData.slides)) return;
+      const items = sessionData.slides.map((s, idx) => {
+        const saved = localStorage.getItem(`voted_summary_${activePin}_${s.id}`) || (hasVotedOnSlide(activePin, s.id) ? '✓ Answered' : 'Skipped');
+        return `
+          <div class="flex items-center justify-between text-xs border-b border-slate-200/60 dark:border-slate-800/60 pb-1.5 last:border-0 last:pb-0">
+            <span class="font-bold text-slate-700 dark:text-slate-300 truncate max-w-[60%]">Q${idx + 1}. ${s.question}</span>
+            <span class="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">${saved}</span>
+          </div>
+        `;
+      }).join('');
+      box.innerHTML = `<p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Your Activity Summary</p>${items}`;
+    }
+
+    window.goPrevQuestion = () => {
+      triggerHaptic('light');
+      if (sessionData && sessionData.pacingMode === 'HOST') return;
+      if (voterSlideIndex > 0) {
+        voterSlideIndex--;
+        renderedSlideKey = null;
+        renderVoterView();
+      }
+    };
+
+    window.goNextQuestion = () => {
+      triggerHaptic('light');
+      if (sessionData && sessionData.pacingMode === 'HOST') return;
+      if (sessionData && voterSlideIndex < sessionData.slides.length) {
+        voterSlideIndex++;
+        renderedSlideKey = null;
+        renderVoterView();
+      }
+    };
+
+    window.jumpToQuestion = (idx) => {
+      triggerHaptic('light');
+      if (sessionData && sessionData.pacingMode === 'HOST') return;
+      voterSlideIndex = idx;
+      renderedSlideKey = null;
+      renderVoterView();
+    };
+
+    document.getElementById('backToQuestionsBtn').addEventListener('click', () => {
+      triggerHaptic('light');
+      if (!sessionData || !Array.isArray(sessionData.slides)) return;
+      if (sessionData.pacingMode === 'HOST') {
+        voterSlideIndex = sessionData.currentSlideIndex || 0;
+      } else {
+        const firstUnanswered = findFirstUnansweredIndex(sessionData);
+        voterSlideIndex = firstUnanswered < sessionData.slides.length ? firstUnanswered : sessionData.slides.length - 1;
+      }
+      renderedSlideKey = null;
+      renderVoterView();
+    });
+
+    document.getElementById('voteAgainBtn').addEventListener('click', () => {
+      triggerHaptic('medium');
+      if (sessionData && Array.isArray(sessionData.slides)) {
+        if (sessionData.pacingMode === 'HOST') {
+          const activeSlide = sessionData.slides[sessionData.currentSlideIndex || 0];
+          if (activeSlide) localStorage.removeItem(`voted_${activePin}_${activeSlide.id}`);
+          voterSlideIndex = sessionData.currentSlideIndex || 0;
+        } else {
+          sessionData.slides.forEach((s) => localStorage.removeItem(`voted_${activePin}_${s.id}`));
+          voterSlideIndex = 0;
+        }
+      }
+      renderedSlideKey = null;
+      renderVoterView();
+    });
+
+    function initVoter(sessionPin) {
+      document.getElementById('pinBadge').textContent = `PIN: ${sessionPin}`;
+      document.getElementById('pinEntry').classList.add('hidden');
+      document.getElementById('reactionBar').classList.remove('hidden');
+      document.getElementById('onlineVoterBadge').classList.remove('hidden');
+
+      socket = io();
+      socket.emit('join_session', sessionPin);
+
+      // Offline & Auto-Reconnect Detection
+      socket.on('disconnect', () => {
+        document.getElementById('offlineBanner').classList.remove('hidden');
+      });
+      socket.on('connect', () => {
+        document.getElementById('offlineBanner').classList.add('hidden');
+        if (activePin) socket.emit('join_session', activePin);
+      });
+
+      socket.on('room_count', (count) => {
+        document.getElementById('onlineVoterBadge').textContent = `🟢 ${count}`;
+      });
+
+      socket.on('celebrate_confetti', () => {
+        triggerHaptic('heavy');
+        if (typeof confetti === 'function') {
+          confetti({
+            particleCount: 65,
+            spread: 70,
+            origin: { y: 0.65 }
+          });
+        }
+      });
+
+      socket.on('session_update', (session) => {
+        sessionData = session;
+        allowMultiple = Boolean(session.allowMultipleVotes);
+        syncVoterCountdown(session);
+
+        if (session.pacingMode === 'HOST') {
+          voterSlideIndex = Number(session.currentSlideIndex) || 0;
+          hasInitializedPosition = true;
+        } else if (!hasInitializedPosition) {
+          hasInitializedPosition = true;
+          voterSlideIndex = allowMultiple ? 0 : findFirstUnansweredIndex(session);
+        } else if (session.slides && voterSlideIndex > session.slides.length) {
+          voterSlideIndex = session.slides.length;
+        }
+
+        const activeSlide = session.slides && session.slides[voterSlideIndex];
+        if (activeSlide && activeSlide.type === 'QA' && document.getElementById('qaLiveList')) {
+          renderQaQuestionsList(activeSlide);
+          return;
+        }
+
+        renderVoterView();
+      });
+
+      socket.on('vote_error', (msg) => {
+        triggerHaptic('heavy');
+        const statusMsg = document.getElementById('statusMsg');
+        statusMsg.className = 'text-center text-xs font-semibold text-amber-500 mt-4';
+        statusMsg.textContent = msg;
+      });
+
+      socket.on('vote_success', ({ slideId, summary }) => {
+        triggerHaptic('heavy');
+        document.getElementById('statusMsg').textContent = '';
+        const currentSlide = sessionData && sessionData.slides && sessionData.slides[voterSlideIndex];
+        const targetId = slideId || (currentSlide && currentSlide.id);
+        if (targetId && (!currentSlide || currentSlide.type !== 'QA')) {
+          localStorage.setItem(`voted_${sessionPin}_${targetId}`, 'true');
+          if (summary) localStorage.setItem(`voted_summary_${sessionPin}_${targetId}`, summary);
+        }
+
+        if (sessionData && sessionData.pacingMode === 'HOST') {
+          renderedSlideKey = null;
+          renderVoterView();
+        } else {
+          voterSlideIndex++;
+          renderedSlideKey = null;
+          renderVoterView();
+        }
+      });
+
+      socket.on('qa_submitted', () => {
+        triggerHaptic('medium');
+        const qaInput = document.getElementById('qaInput');
+        if (qaInput) qaInput.value = '';
+        const postBtn = document.getElementById('qaPostBtn');
+        if (postBtn) postBtn.textContent = 'Post Question';
+        const statusMsg = document.getElementById('statusMsg');
+        statusMsg.className = 'text-center text-xs font-bold text-emerald-500 mt-4';
+        statusMsg.textContent = '✓ Question posted live!';
+        setTimeout(() => { statusMsg.textContent = ''; }, 3000);
+      });
+
+      socket.on('error_msg', (msg) => {
+        hideAllScreens();
+        document.getElementById('pinEntry').classList.remove('hidden');
+        document.getElementById('statusMsg').textContent = msg;
+      });
+    }
+
+    function renderQaQuestionsList(slide) {
+      const listEl = document.getElementById('qaLiveList');
+      if (!listEl) return;
+      const questions = (slide.questions || []).slice().sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0));
+      if (questions.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">No questions asked yet. Type a question above!</p>`;
+        return;
+      }
+      listEl.innerHTML = questions.map((q) => {
+        const hasUpvoted = Array.isArray(q.upvotedBy) && q.upvotedBy.includes(voterId);
+        return `
+          <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+            <div class="space-y-0.5 text-left">
+              <span class="text-[10px] font-bold text-slate-400">${q.voterAvatar || '👤'} ${q.voterName || 'Anonymous'}</span>
+              <p class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100">❓ ${q.text}</p>
+            </div>
+            <button
+              type="button"
+              onclick="upvoteQa('${slide.id}', '${q.id}')"
+              class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+                hasUpvoted
+                  ? 'bg-rose-600 text-white border-rose-600'
+                  : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
+              }"
+            >
+              👍 ${q.upvotes || 0}
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.moveRankItem = (index, direction) => {
+      triggerHaptic('light');
+      const targetIdx = index + direction;
+      if (targetIdx < 0 || targetIdx >= currentRankingOrder.length) return;
+      const temp = currentRankingOrder[index];
+      currentRankingOrder[index] = currentRankingOrder[targetIdx];
+      currentRankingOrder[targetIdx] = temp;
+      renderRankingItemsDOM();
+    };
+
+    function renderRankingItemsDOM() {
+      const box = document.getElementById('rankingItemsContainer');
+      if (!box) return;
+      box.innerHTML = currentRankingOrder.map((it, idx) => `
+        <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-sm">
+          <div class="flex items-center space-x-3">
+            <span class="w-7 h-7 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 font-mono text-xs font-black flex items-center justify-center">
+              #${idx + 1}
+            </span>
+            <span class="text-sm font-bold text-slate-900 dark:text-white">${it.text}</span>
+          </div>
+          <div class="flex items-center space-x-1">
+            <button
+              type="button"
+              onclick="moveRankItem(${idx}, -1)"
+              ${idx === 0 ? 'disabled' : ''}
+              class="p-2 rounded-lg text-xs font-black ${idx === 0 ? 'text-slate-300 dark:text-slate-700 cursor-not-allowed' : 'bg-slate-200 dark:bg-slate-800 hover:bg-sky-500 hover:text-white text-slate-700 dark:text-slate-200 cursor-pointer'}"
+              title="Move Up"
+            >↑</button>
+            <button
+              type="button"
+              onclick="moveRankItem(${idx}, 1)"
+              ${idx === currentRankingOrder.length - 1 ? 'disabled' : ''}
+              class="p-2 rounded-lg text-xs font-black ${idx === currentRankingOrder.length - 1 ? 'text-slate-300 dark:text-slate-700 cursor-not-allowed' : 'bg-slate-200 dark:bg-slate-800 hover:bg-sky-500 hover:text-white text-slate-700 dark:text-slate-200 cursor-pointer'}"
+              title="Move Down"
+            >↓</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderVoterView() {
+      if (!sessionData) return;
+
+      const isHostSynced = sessionData.pacingMode === 'HOST';
+      const voteAgainBtn = document.getElementById('voteAgainBtn');
+      const backBtn = document.getElementById('backToQuestionsBtn');
+
+      if (allowMultiple) voteAgainBtn.classList.remove('hidden');
+      else voteAgainBtn.classList.add('hidden');
+
+      if (isHostSynced) backBtn.classList.add('hidden');
+      else backBtn.classList.remove('hidden');
+
+      if (sessionData.status === 'DRAFT') { renderedSlideKey = null; hideAllScreens(); document.getElementById('waitingState').classList.remove('hidden'); return; }
+      if (sessionData.status === 'PAUSED') { renderedSlideKey = null; hideAllScreens(); document.getElementById('pausedState').classList.remove('hidden'); return; }
+      if (sessionData.status === 'CLOSED') { renderedSlideKey = null; hideAllScreens(); document.getElementById('closedState').classList.remove('hidden'); return; }
+
+      const slides = sessionData.slides || [];
+      if (slides.length === 0) return;
+
+      if (voterSlideIndex >= slides.length) {
+        hideAllScreens();
+        renderVoterHistorySummary();
+        document.getElementById('votedState').classList.remove('hidden');
+        return;
+      }
+
+      const slide = slides[voterSlideIndex];
+      const isAlreadyAnswered = slide.type !== 'QA' && !allowMultiple && hasVotedOnSlide(activePin, slide.id);
+      const optionsHash = JSON.stringify((slide.options || []).map((o) => o.text)) + JSON.stringify((slide.items || []).map((i) => i.text));
+      const currentKey = `${voterSlideIndex}_${slide.id}_${isAlreadyAnswered}_${allowMultiple}_${isHostSynced}_${optionsHash}`;
+      const isFirstQuestion = voterSlideIndex === 0;
+      const isLastQuestion = voterSlideIndex === slides.length - 1;
+      const btnLabel = isHostSynced
+        ? 'Submit Response ✓'
+        : isLastQuestion
+        ? 'Submit Final Response ✓'
+        : `Submit & Next (${voterSlideIndex + 2}/${slides.length}) →`;
+
+      hideAllScreens();
+      const container = document.getElementById('slideContainer');
+      container.classList.remove('hidden');
+
+      if (renderedSlideKey !== currentKey) {
+        renderedSlideKey = currentKey;
+        container.innerHTML = '';
+
+        const progressDots = slides.map((s, i) => `
+          <button
+            type="button"
+            onclick="jumpToQuestion(${i})"
+            ${isHostSynced ? 'disabled' : ''}
+            class="h-2.5 w-2.5 rounded-full transition-all duration-300 ${isHostSynced ? 'cursor-default' : 'cursor-pointer'} ${
+              i === voterSlideIndex ? 'bg-indigo-600 dark:bg-indigo-400 w-6' : hasVotedOnSlide(activePin, s.id) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+            }"
+          ></button>
+        `).join('');
+
+        const topHeader = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="text-xs font-mono font-extrabold uppercase text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg">
+                Question ${voterSlideIndex + 1} of ${slides.length}
+              </span>
+              ${isHostSynced ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-500">🎯 Live Synced</span>` : ''}
+            </div>
+            <div class="flex items-center space-x-1.5">${progressDots}</div>
+          </div>
+        `;
+
+        const navBar = isHostSynced
+          ? `<div class="pt-3 border-t border-slate-200 dark:border-slate-800 text-center text-[11px] font-mono text-slate-400">🎯 Synced with presenter's screen</div>`
+          : `
+            <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
+              <button type="button" onclick="goPrevQuestion()" ${isFirstQuestion ? 'disabled' : ''} class="px-4 py-2 rounded-xl text-xs font-bold ${isFirstQuestion ? 'text-slate-300 dark:text-slate-700 cursor-not-allowed' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer'}">← Previous</button>
+              <span class="text-[11px] font-mono text-slate-400">${isAlreadyAnswered ? '✓ Answered' : 'Self-Paced'}</span>
+              <button type="button" onclick="goNextQuestion()" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 cursor-pointer">${isLastQuestion ? 'Finish →' : 'Skip / Next →'}</button>
+            </div>
+          `;
+
+        if (isAlreadyAnswered) {
+          container.innerHTML = `
+            <div class="slide-card-anim bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+              ${topHeader}
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">${slide.question}</h1>
+              <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 text-center space-y-2">
+                <div class="text-2xl font-black text-emerald-500">✓</div>
+                <p class="text-sm font-extrabold text-emerald-600 dark:text-emerald-300">Response Submitted!</p>
+                <p class="text-xs text-slate-400">${isHostSynced ? 'Waiting for the host to advance to the next slide...' : 'Use the buttons below to move to the next question.'}</p>
+              </div>
+              ${navBar}
+            </div>
+          `;
+          return;
+        }
+
+        // 1. RATING SLIDER
+        if (slide.type === 'RATING_SLIDER') {
+          container.innerHTML = `
+            <div class="slide-card-anim bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+              ${topHeader}
+              <h1 id="slideQuestionTitle" class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-snug">${slide.question}</h1>
+              
+              <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 text-center space-y-1">
+                <div id="selEmoji" class="text-5xl mb-1 transition-transform duration-200 inline-block">😐</div>
+                <div id="selNum" class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">3 / 5</div>
+                <div id="selMeaning" class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-amber-500">Neutral</div>
+              </div>
+
+              <div class="space-y-4 pt-8">
+                <div id="hoverZone" class="relative flex items-center">
+                  <div id="bubble" class="emoji-hover-bubble bg-slate-900 border-2 rounded-2xl px-3.5 py-2 flex items-center space-x-2 shadow-2xl" style="left: 50%; --bubble-border: #fbbf24; border-color: #fbbf24;">
+                    <span id="bubbleIcon" class="text-2xl select-none">😐</span>
+                    <div class="text-left leading-tight">
+                      <div id="bubbleNum" class="text-xs font-extrabold text-white">3 / 5</div>
+                      <div id="bubbleLbl" class="text-[10px] font-bold uppercase tracking-wider text-amber-400">Neutral</div>
+                    </div>
+                  </div>
+                  <input id="slider" type="range" min="1" max="5" step="1" value="3" class="w-full" />
+                </div>
+
+                <div class="grid grid-cols-5 gap-2 pt-1">
+                  ${[1, 2, 3, 4, 5].map((n) => `
+                    <button type="button" onclick="setSliderScore(${n})" id="scorePill_${n}" class="py-2 rounded-xl font-mono text-xs sm:text-sm font-extrabold border transition cursor-pointer">${n}</button>
+                  `).join('')}
+                </div>
+
+                <div class="flex justify-between text-[11px] font-extrabold uppercase tracking-wider">
+                  <span class="text-rose-500">${slide.minLabel || '1 = Bad'}</span>
+                  <span class="text-emerald-500">${slide.maxLabel || '5 = Good'}</span>
+                </div>
+              </div>
+
+              <div class="space-y-1.5 text-left">
+                <label for="sugInput" class="block text-xs uppercase tracking-wider text-slate-400 font-bold">💬 Your Suggestion / Feedback (Optional)</label>
+                <textarea id="sugInput" rows="2" placeholder="Write your suggestion or thoughts here..." class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"></textarea>
+              </div>
+
+              <button type="button" onclick="sendSliderVote('${slide.id}')" class="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 font-extrabold rounded-2xl text-white text-sm shadow-xl cursor-pointer transition">
+                ${btnLabel}
+              </button>
+              ${navBar}
+            </div>
+          `;
+          setupSlider();
+        }
+
+        // 2. WORD CLOUD
+        else if (slide.type === 'WORD_CLOUD') {
+          container.innerHTML = `
+            <div class="slide-card-anim bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 text-center">
+              ${topHeader}
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">${slide.question}</h1>
+              <input id="wordInput" type="text" placeholder="Type a word or short phrase..." maxlength="25" class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-950 border-2 border-slate-300 dark:border-slate-700 rounded-2xl text-lg font-bold text-slate-900 dark:text-white text-center focus:outline-none focus:border-violet-500" />
+              <button type="button" onclick="sendWordVote('${slide.id}')" class="w-full py-4 bg-gradient-to-r from-violet-600 to-indigo-600 font-extrabold rounded-2xl text-white text-sm shadow-xl cursor-pointer transition">
+                ${btnLabel}
+              </button>
+              ${navBar}
+            </div>
+          `;
+        }
+
+        // 3. MULTIPLE CHOICE
+        else if (slide.type === 'MULTIPLE_CHOICE') {
+          const optsHTML = (slide.options || []).map((o, idx) => `
+            <button
+              type="button"
+              onclick="sendMcVote('${slide.id}', '${o.id}')"
+              class="w-full p-4 bg-slate-50 dark:bg-slate-950 hover:bg-indigo-600/15 border-2 border-slate-200 dark:border-slate-800 hover:border-indigo-500 rounded-2xl flex items-center space-x-3.5 text-left transition cursor-pointer group"
+            >
+              <span class="w-8 h-8 rounded-xl bg-indigo-500/10 group-hover:bg-indigo-600 text-indigo-600 dark:text-indigo-400 group-hover:text-white font-mono text-xs font-black flex items-center justify-center transition">
+                ${String.fromCharCode(65 + idx)}
+              </span>
+              <span class="font-bold text-sm sm:text-base text-slate-900 dark:text-white">${o.text}</span>
+            </button>
+          `).join('');
+
+          container.innerHTML = `
+            <div class="slide-card-anim bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+              ${topHeader}
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">${slide.question}</h1>
+              <p class="text-xs text-slate-400">Tap an option below to cast your vote:</p>
+              <div class="space-y-2.5">${optsHTML}</div>
+              ${navBar}
+            </div>
+          `;
+        }
+
+        // 4. OPEN ENDED
+        else if (slide.type === 'OPEN_ENDED') {
+          container.innerHTML = `
+            <div class="slide-card-anim bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+              ${topHeader}
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">${slide.question}</h1>
+              <textarea id="openText" rows="4" placeholder="Type your full response or idea here..." class="w-full px-4 py-3.5 bg-slate-50 dark:bg-slate-950 border-2 border-slate-300 dark:border-slate-700 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"></textarea>
+              <button id="openSubmitBtn" type="button" onclick="sendOpenVote('${slide.id}')" class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 font-extrabold rounded-2xl text-white text-sm shadow-xl cursor-pointer transition">
+                ${btnLabel}
+              </button>
+              ${navBar}
+            </div>
+          `;
+        }
+
+        // 5. RANKING POLL
+        else if (slide.type === 'RANKING') {
+          const defaultItems = Array.isArray(slide.items) && slide.items.length > 0
+            ? slide.items
+            : [
+                { id: 'item_1', text: 'Speed & Performance' },
+                { id: 'item_2', text: 'Ease of Use (UI/UX)' },
+                { id: 'item_3', text: 'New Features' }
+              ];
+          currentRankingOrder = defaultItems.map((it) => ({ id: it.id, text: it.text }));
+
+          container.innerHTML = `
+            <div class="slide-card-anim bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+              ${topHeader}
+              <div class="space-y-1">
+                <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">${slide.question}</h1>
+                <p class="text-xs text-slate-400">Use ↑ and ↓ buttons to order items from #1 (top priority) to last:</p>
+              </div>
+              <div id="rankingItemsContainer" class="space-y-2.5"></div>
+              <button id="rankSubmitBtn" type="button" onclick="sendRankingVote('${slide.id}')" class="w-full py-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 font-extrabold rounded-2xl text-white text-sm shadow-xl cursor-pointer transition">
+                ${btnLabel}
+              </button>
+              ${navBar}
+            </div>
+          `;
+          renderRankingItemsDOM();
+        }
+
+        // 6. LIVE Q&A BOARD
+        else if (slide.type === 'QA') {
+          container.innerHTML = `
+            <div class="slide-card-anim bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+              ${topHeader}
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">${slide.question}</h1>
+              <div class="flex space-x-2">
+                <input id="qaInput" type="text" placeholder="Type your question for the host..." class="flex-grow px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-rose-500" />
+                <button id="qaPostBtn" type="button" onclick="sendQa('${slide.id}', false)" class="px-4 py-3 bg-rose-600 hover:bg-rose-500 font-extrabold rounded-xl text-xs text-white cursor-pointer shrink-0 shadow-md">
+                  Post Question
+                </button>
+              </div>
+              <div class="space-y-2">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Live Audience Questions (Tap 👍 to Upvote)</span>
+                <div id="qaLiveList" class="space-y-2.5 max-h-56 overflow-y-auto pr-1"></div>
+              </div>
+              ${!isHostSynced ? `
+                <button id="qaNextBtn" type="button" onclick="sendQa('${slide.id}', true)" class="w-full py-4 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 font-extrabold rounded-2xl text-white text-sm shadow-xl cursor-pointer transition">
+                  ${btnLabel}
+                </button>
+              ` : ''}
+              ${navBar}
+            </div>
+          `;
+          renderQaQuestionsList(slide);
+        }
+      }
+    }
+
+    const SCALE = {
+      1: { emoji: '😞', text: 'Bad', color: 'text-rose-500', hex: '#f43f5e', aura: 'bg-rose-500' },
+      2: { emoji: '🙁', text: 'Poor', color: 'text-orange-500', hex: '#fb923c', aura: 'bg-orange-500' },
+      3: { emoji: '😐', text: 'Neutral', color: 'text-amber-500', hex: '#fbbf24', aura: 'bg-amber-500' },
+      4: { emoji: '🙂', text: 'Good', color: 'text-teal-500', hex: '#2dd4bf', aura: 'bg-teal-500' },
+      5: { emoji: '😄', text: 'Very Good!', color: 'text-emerald-500', hex: '#10b981', aura: 'bg-emerald-500' }
+    };
+
+    window.setSliderScore = (val) => {
+      triggerHaptic('light');
+      const slider = document.getElementById('slider');
+      if (!slider) return;
+      slider.value = val;
+      slider.dispatchEvent(new Event('input'));
+    };
+
+    function setupSlider() {
+      const slider = document.getElementById('slider');
+      const bubble = document.getElementById('bubble');
+      const hoverZone = document.getElementById('hoverZone');
+      if (!slider || !bubble || !hoverZone) return;
+
+      const update = (val) => {
+        const s = Number(val);
+        const m = SCALE[s] || SCALE[3];
+        slider.value = s;
+
+        const emojiEl = document.getElementById('selEmoji');
+        if (emojiEl) {
+          emojiEl.textContent = m.emoji;
+          emojiEl.style.transform = 'scale(1.18)';
+          setTimeout(() => { emojiEl.style.transform = 'scale(1)'; }, 140);
+        }
+
+        const numEl = document.getElementById('selNum');
+        if (numEl) numEl.textContent = `${s} / 5`;
+
+        const meaningEl = document.getElementById('selMeaning');
+        if (meaningEl) {
+          meaningEl.textContent = m.text;
+          meaningEl.className = `text-xs sm:text-sm font-extrabold uppercase tracking-wider ${m.color}`;
+        }
+
+        bubble.style.left = `${4 + ((s - 1) / 4) * 92}%`;
+        bubble.style.borderColor = m.hex;
+        bubble.style.setProperty('--bubble-border', m.hex);
+        document.getElementById('bubbleNum').textContent = `${s} / 5`;
+        document.getElementById('bubbleLbl').textContent = m.text;
+        document.getElementById('bubbleIcon').textContent = m.emoji;
+
+        const aura = document.getElementById('ambientAura');
+        if (aura) {
+          aura.className = `fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] sm:w-[520px] h-[360px] sm:h-[520px] rounded-full blur-[110px] opacity-25 dark:opacity-20 pointer-events-none transition-colors duration-500 ${m.aura} z-0`;
+        }
+
+        for (let i = 1; i <= 5; i++) {
+          const pill = document.getElementById(`scorePill_${i}`);
+          if (pill) {
+            pill.className = i === s
+              ? 'py-2 rounded-xl font-mono text-xs sm:text-sm font-black bg-indigo-600 text-white border-indigo-600 shadow-md transition cursor-pointer'
+              : 'py-2 rounded-xl font-mono text-xs sm:text-sm font-bold bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 transition cursor-pointer';
+          }
+        }
+      };
+
+      hoverZone.addEventListener('mouseenter', () => bubble.classList.add('show-bubble'));
+      hoverZone.addEventListener('mousemove', (e) => {
+        bubble.classList.add('show-bubble');
+        const rect = slider.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        update(Math.round(1 + x * 4));
+      });
+      hoverZone.addEventListener('mouseleave', () => bubble.classList.remove('show-bubble'));
+      slider.addEventListener('input', (e) => {
+        triggerHaptic('light');
+        bubble.classList.add('show-bubble');
+        update(e.target.value);
+      });
+      slider.addEventListener('touchend', () => {
+        setTimeout(() => bubble.classList.remove('show-bubble'), 900);
+      });
+
+      update(3);
+    }
+
+    // Submission Handlers
+    window.sendSliderVote = (slideId) => {
+      triggerHaptic('medium');
+      const slider = document.getElementById('slider');
+      const sugInput = document.getElementById('sugInput');
+      if (!slider) return;
+      socket.emit('submit_response', {
+        pin: activePin,
+        slideId,
+        slideIndex: voterSlideIndex,
+        slideType: 'RATING_SLIDER',
+        rating: Number(slider.value),
+        suggestion: sugInput ? sugInput.value.trim() : '',
+        voterName,
+        voterAvatar,
+        voterId
+      });
+    };
+
+    window.sendWordVote = (slideId) => {
+      triggerHaptic('medium');
+      const wordInput = document.getElementById('wordInput');
+      const word = wordInput ? wordInput.value.trim() : '';
+      if (!word) return alert('Please enter a word.');
+      socket.emit('submit_response', {
+        pin: activePin,
+        slideId,
+        slideIndex: voterSlideIndex,
+        slideType: 'WORD_CLOUD',
+        word,
+        voterName,
+        voterAvatar,
+        voterId
+      });
+    };
+
+    window.sendMcVote = (slideId, optionId) => {
+      triggerHaptic('medium');
+      socket.emit('submit_response', {
+        pin: activePin,
+        slideId,
+        slideIndex: voterSlideIndex,
+        slideType: 'MULTIPLE_CHOICE',
+        optionId,
+        voterName,
+        voterAvatar,
+        voterId
+      });
+    };
+
+    window.sendOpenVote = (slideId) => {
+      triggerHaptic('medium');
+      const openText = document.getElementById('openText');
+      const text = openText ? openText.value.trim() : '';
+      if (!text) return alert('Please write a response before submitting.');
+      const btn = document.getElementById('openSubmitBtn');
+      if (btn) btn.textContent = 'Submitting...';
+      socket.emit('submit_response', {
+        pin: activePin,
+        slideId,
+        slideIndex: voterSlideIndex,
+        slideType: 'OPEN_ENDED',
+        text,
+        voterName,
+        voterAvatar,
+        voterId
+      });
+    };
+
+    window.sendRankingVote = (slideId) => {
+      triggerHaptic('medium');
+      const slide = sessionData && sessionData.slides && sessionData.slides[voterSlideIndex];
+      const orderedIds = currentRankingOrder && currentRankingOrder.length > 0
+        ? currentRankingOrder.map((it) => it.id)
+        : (slide && slide.items ? slide.items.map((it) => it.id) : []);
+
+      if (orderedIds.length === 0) return alert('No ranking items available.');
+      const btn = document.getElementById('rankSubmitBtn');
+      if (btn) btn.textContent = 'Submitting...';
+      socket.emit('submit_response', {
+        pin: activePin,
+        slideId,
+        slideIndex: voterSlideIndex,
+        slideType: 'RANKING',
+        ranking: orderedIds,
+        voterName,
+        voterAvatar,
+        voterId
+      });
+    };
+
+    window.sendQa = (slideId, advanceAfterQa = false) => {
+      triggerHaptic('medium');
+      const qaInput = document.getElementById('qaInput');
+      const text = qaInput ? qaInput.value.trim() : '';
+
+      if (!advanceAfterQa && !text) return alert('Please enter a question to post.');
+
+      if (advanceAfterQa && !text) {
+        voterSlideIndex++;
+        renderedSlideKey = null;
+        renderVoterView();
+        return;
+      }
+
+      const postBtn = document.getElementById('qaPostBtn');
+      if (postBtn && !advanceAfterQa) postBtn.textContent = 'Posting...';
+
+      socket.emit('submit_response', {
+        pin: activePin,
+        slideId,
+        slideIndex: voterSlideIndex,
+        slideType: 'QA',
+        text,
+        advanceAfterQa,
+        voterName,
+        voterAvatar,
+        voterId
+      });
+    };
+
+    window.upvoteQa = (slideId, questionId) => {
+      triggerHaptic('light');
+      socket.emit('upvote_qa', {
+        pin: activePin,
+        slideId,
+        slideIndex: voterSlideIndex,
+        questionId,
+        voterId
+      });
+    };
+  </script>
+</body>
+</html>

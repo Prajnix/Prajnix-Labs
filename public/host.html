@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Host Studio & Stage | PraJniX Labs</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.9) translateY(8px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .anim-pop { animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+    @keyframes floatUpEmoji {
+      0% { opacity: 0; transform: translateY(20px) scale(0.6) rotate(0deg); }
+      15% { opacity: 1; transform: translateY(-20px) scale(1.15) rotate(-8deg); }
+      50% { opacity: 0.95; transform: translateY(-160px) scale(1) rotate(8deg); }
+      100% { opacity: 0; transform: translateY(-340px) scale(0.8) rotate(-5deg); }
+    }
+    .floating-emoji {
+      position: fixed;
+      bottom: 84px;
+      pointer-events: none;
+      z-index: 60;
+      font-size: 2.25rem;
+      filter: drop-shadow(0 6px 14px rgba(0,0,0,0.25));
+      animation: floatUpEmoji 2.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    /* Print / PDF Stylesheet */
+    @media print {
+      header, aside, #presenterDockWrap, #stageTimerWrap { display: none !important; }
+      body, section, #slideCanvas { background: #ffffff !important; color: #000000 !important; height: auto !important; overflow: visible !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300 selection:bg-indigo-500 selection:text-white overflow-x-hidden">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shrink-0">
+    <div class="flex items-center space-x-3">
+      <button id="mobileSlideMenuBtn" class="hidden md:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/></svg>
+      </button>
+      <div class="flex items-center space-x-2.5 cursor-pointer" id="brandHomeClick">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center font-black text-white shadow-md">P</div>
+        <div>
+          <span class="font-extrabold text-slate-900 dark:text-white text-base md:text-lg tracking-tight">PraJniX</span>
+          <span class="text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-500/20 ml-1">Studio</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Join Pill + Connected Audience Counter -->
+    <div id="topJoinBanner" class="hidden lg:flex items-center bg-slate-100 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-full px-5 py-1.5 space-x-4 shadow-inner">
+      <div class="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+        <span>Join at <strong id="topBannerUrl" class="text-slate-800 dark:text-slate-200 font-semibold">localhost:3000/vote</strong></span>
+      </div>
+      <div class="h-4 w-px bg-slate-300 dark:bg-slate-800"></div>
+      <div class="flex items-center space-x-1.5">
+        <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">PIN:</span>
+        <span id="pinBadge" class="font-mono font-black text-sm md:text-base text-indigo-600 dark:text-indigo-400 tracking-widest">------</span>
+      </div>
+      <div class="h-4 w-px bg-slate-300 dark:bg-slate-800"></div>
+      <div class="flex items-center space-x-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400" title="Participants currently connected in room">
+        <span>🟢</span>
+        <span id="onlineCountBadge">1 Online</span>
+      </div>
+      <button id="topQrTrigger" class="text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-full transition cursor-pointer">QR Code</button>
+    </div>
+
+    <div class="flex items-center space-x-2 md:space-x-2.5">
+      <div id="activeHeader" class="hidden flex items-center space-x-1.5 sm:space-x-2">
+        <!-- Sound Effects Mute/Unmute Toggle -->
+        <button id="sfxToggleBtn" onclick="toggleSoundEffects()" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer transition" title="Toggle Stage Sound Effects">
+          🔊 SFX
+        </button>
+
+        <!-- Phone Remote Control Button -->
+        <button id="openRemoteBtn" onclick="openRemoteModal()" class="px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 text-xs font-bold transition flex items-center space-x-1 cursor-pointer" title="Control this stage from your mobile phone">
+          <span>📱 Remote</span>
+        </button>
+
+        <button id="fullscreenStageBtn" class="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-semibold text-slate-700 dark:text-slate-200 transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+          <span id="fsBtnText">Present</span>
+        </button>
+
+        <!-- Stage Delete Presentation Button -->
+        <button onclick="deleteCurrentPresentation()" class="px-2.5 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-xs font-semibold text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 transition cursor-pointer flex items-center space-x-1" title="Delete this presentation permanently">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          <span class="hidden sm:inline">Delete</span>
+        </button>
+
+        <button id="backHubBtn" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-semibold text-slate-700 dark:text-slate-300 transition cursor-pointer flex items-center space-x-1">
+          <span>← Hub</span>
+        </button>
+      </div>
+
+      <button id="themeToggleBtn" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition cursor-pointer">
+        <svg id="sunIcon" class="w-4 h-4 hidden dark:block text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg id="moonIcon" class="w-4 h-4 block dark:hidden text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- VIEW 1: PRESENTATIONS HUB -->
+  <div id="hubView" class="flex-grow w-full max-w-[1440px] mx-auto px-4 sm:px-8 py-8 md:py-12 space-y-8">
+    <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-700 p-6 sm:p-10 text-white shadow-xl">
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div class="space-y-2 max-w-xl">
+          <span class="inline-flex items-center space-x-1.5 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-white/15 backdrop-blur-md">✨ Enterprise Polling & Live Quiz</span>
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight">Engage thousands in real time.</h1>
+          <p class="text-indigo-100 text-xs sm:text-sm leading-relaxed">6 Slide formats, Live Quiz Podium, Secure Mobile Presenter Remote, Confetti Cannon, Audio SFX, and PDF/CSV Reports.</p>
+        </div>
+        <button id="openCreateModal" class="shrink-0 px-6 py-4 bg-white text-indigo-700 hover:bg-indigo-50 font-extrabold rounded-2xl text-sm shadow-xl cursor-pointer transition flex items-center justify-center space-x-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          <span>New Presentation</span>
+        </button>
+      </div>
+      <div class="absolute -right-16 -bottom-16 w-72 h-72 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-200">Your Presentations</h2>
+        <span id="hubCountBadge" class="text-xs font-semibold text-slate-500 dark:text-slate-400">Loading...</span>
+      </div>
+      <div id="sessionsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"></div>
+    </div>
+  </div>
+
+  <!-- VIEW 2: STUDIO + LIVE STAGE WORKSPACE -->
+  <div id="stageView" class="hidden flex-grow flex flex-col md:flex-row h-[calc(100vh-4rem)] w-full overflow-hidden relative">
+    <div id="mobileSidebarBackdrop" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 md:hidden"></div>
+
+    <!-- LEFT RAIL: SLIDE DECK FILMSTRIP -->
+    <aside id="leftSlideRail" class="fixed md:static inset-y-0 left-0 z-40 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-full shrink-0 transform -translate-x-full md:translate-x-0 transition-transform duration-300">
+      <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <span class="text-xs font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Slides Deck</span>
+        <button id="editDeckBtn" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">✎ Bulk Edit</button>
+      </div>
+
+      <div id="sidebarSlidesList" class="flex-grow overflow-y-auto p-3 space-y-2.5"></div>
+
+      <!-- ANIMATED "+ NEW SLIDE" DROPDOWN MENU -->
+      <div class="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/70 relative">
+        <button
+          id="newSlideDropdownBtn"
+          type="button"
+          onclick="toggleNewSlideMenu()"
+          class="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold rounded-xl text-xs shadow-lg cursor-pointer transition flex items-center justify-between"
+        >
+          <span class="flex items-center space-x-2">
+            <svg id="plusIconSvg" class="w-4 h-4 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            <span id="newSlideBtnText">New Slide</span>
+          </span>
+          <span id="chevronSvg" class="text-xs font-mono transition-transform duration-300">▲</span>
+        </button>
+
+        <div id="newSlideMenuPopup" class="hidden absolute bottom-16 left-2.5 right-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-3 z-50 space-y-2.5 anim-pop">
+          <div class="flex items-center justify-between px-1">
+            <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Select Slide Format</span>
+            <button type="button" onclick="toggleNewSlideMenu()" class="text-xs text-slate-400 hover:text-rose-500 font-bold cursor-pointer">✕</button>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-1.5">
+            <button type="button" onclick="addNewSlide('MULTIPLE_CHOICE')" onmouseenter="showSlideTooltip('MULTIPLE_CHOICE')" class="flex flex-col items-start p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50 dark:hover:bg-indigo-600/20 border border-slate-200/70 dark:border-slate-800 hover:border-indigo-500 transition cursor-pointer text-left">
+              <span class="text-indigo-600 dark:text-indigo-400 font-extrabold text-xs">📊 Multiple Choice</span>
+              <span class="text-[10px] text-slate-400 mt-0.5">Poll + Quiz Mode</span>
+            </button>
+
+            <button type="button" onclick="addNewSlide('WORD_CLOUD')" onmouseenter="showSlideTooltip('WORD_CLOUD')" class="flex flex-col items-start p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-violet-50 dark:hover:bg-violet-600/20 border border-slate-200/70 dark:border-slate-800 hover:border-violet-500 transition cursor-pointer text-left">
+              <span class="text-violet-600 dark:text-violet-400 font-extrabold text-xs">☁️ Word Cloud</span>
+              <span class="text-[10px] text-slate-400 mt-0.5">Crowd Words</span>
+            </button>
+
+            <button type="button" onclick="addNewSlide('RATING_SLIDER')" onmouseenter="showSlideTooltip('RATING_SLIDER')" class="flex flex-col items-start p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-amber-50 dark:hover:bg-amber-600/20 border border-slate-200/70 dark:border-slate-800 hover:border-amber-500 transition cursor-pointer text-left">
+              <span class="text-amber-600 dark:text-amber-400 font-extrabold text-xs">🎚️ Rating Slider</span>
+              <span class="text-[10px] text-slate-400 mt-0.5">1–5 Emoji Scale</span>
+            </button>
+
+            <button type="button" onclick="addNewSlide('OPEN_ENDED')" onmouseenter="showSlideTooltip('OPEN_ENDED')" class="flex flex-col items-start p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-emerald-50 dark:hover:bg-emerald-600/20 border border-slate-200/70 dark:border-slate-800 hover:border-emerald-500 transition cursor-pointer text-left">
+              <span class="text-emerald-600 dark:text-emerald-400 font-extrabold text-xs">💬 Open Ended</span>
+              <span class="text-[10px] text-slate-400 mt-0.5">Speech Grid</span>
+            </button>
+
+            <button type="button" onclick="addNewSlide('RANKING')" onmouseenter="showSlideTooltip('RANKING')" class="flex flex-col items-start p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-sky-50 dark:hover:bg-sky-600/20 border border-slate-200/70 dark:border-slate-800 hover:border-sky-500 transition cursor-pointer text-left">
+              <span class="text-sky-600 dark:text-sky-400 font-extrabold text-xs">🏆 Ranking Poll</span>
+              <span class="text-[10px] text-slate-400 mt-0.5">Order Priorities</span>
+            </button>
+
+            <button type="button" onclick="addNewSlide('QA')" onmouseenter="showSlideTooltip('QA')" class="flex flex-col items-start p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-rose-50 dark:hover:bg-rose-600/20 border border-slate-200/70 dark:border-slate-800 hover:border-rose-500 transition cursor-pointer text-left">
+              <span class="text-rose-600 dark:text-rose-400 font-extrabold text-xs">🙋 Live Q&A</span>
+              <span class="text-[10px] text-slate-400 mt-0.5">Audience Questions</span>
+            </button>
+          </div>
+
+          <div id="slideInfoTooltipBox" class="bg-indigo-50 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 rounded-xl p-2.5 text-[11px] leading-relaxed border border-indigo-200 dark:border-indigo-500/30">
+            💡 <strong>Hover over any slide type</strong> above to see how it works before adding it.
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER WORKSPACE: STAGE CANVAS -->
+    <section class="flex-grow flex flex-col h-full relative bg-slate-100/70 dark:bg-slate-950 overflow-hidden">
+      
+      <div class="flex-grow overflow-y-auto p-4 sm:p-6 lg:p-8 pb-32">
+        <!-- Top Countdown Timer Bar -->
+        <div id="stageTimerWrap" class="hidden max-w-6xl w-full mx-auto mb-4 bg-white dark:bg-slate-900 border border-amber-500/40 rounded-2xl p-3 shadow-lg">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-amber-500 flex items-center space-x-1.5">
+              <span>⏱️ Countdown Active</span>
+            </span>
+            <div class="flex items-center space-x-3">
+              <span id="stageTimerText" class="font-mono font-black text-lg text-slate-900 dark:text-white">00:30</span>
+              <button onclick="startStageTimer(0)" class="text-[11px] font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white cursor-pointer transition">Cancel</button>
+            </div>
+          </div>
+          <div class="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div id="stageTimerBar" class="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-300" style="width: 100%"></div>
+          </div>
+        </div>
+
+        <!-- Stage Subheader -->
+        <div class="max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div class="flex items-center space-x-3">
+            <span id="stageStatus" class="text-xs font-extrabold px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase tracking-wider">DRAFT MODE</span>
+            <h2 id="stageDeckTitle" class="text-lg sm:text-xl font-extrabold text-slate-800 dark:text-white truncate max-w-xs sm:max-w-md"></h2>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span class="lg:hidden text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" id="mobileOnlineBadge">🟢 1</span>
+            <span class="lg:hidden text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" id="mobilePinBadge">PIN: ------</span>
+          </div>
+        </div>
+
+        <!-- Slide Canvas Body -->
+        <div id="slideCanvas" class="max-w-6xl w-full mx-auto flex-grow flex flex-col justify-center"></div>
+      </div>
+
+      <!-- FLOATING PRESENTER CONTROL DOCK -->
+      <div id="presenterDockWrap" class="absolute bottom-4 inset-x-0 flex justify-center pointer-events-none z-20 px-3 sm:px-6 transition-opacity duration-500">
+        <div class="pointer-events-auto w-full max-w-5xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800 rounded-2xl px-3 sm:px-5 py-2.5 shadow-2xl flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center space-x-1.5">
+            <button id="prevSlideBtn" class="p-2 sm:px-3 sm:py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer transition">← Prev</button>
+            <span id="slideIndicator" class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 px-1.5">1 / 2</span>
+            <button id="nextSlideBtn" class="p-2 sm:px-3 sm:py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer transition">Next →</button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button id="togglePacingBtn" title="Switch between Self-Paced survey or Host-Synced live slide pacing" class="px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition">
+              🏃 Self-Paced
+            </button>
+
+            <button id="toggleHideResultsBtn" title="Blur results on projector to prevent audience bias" class="px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition">
+              👁️ Hide Results
+            </button>
+
+            <!-- Quiz Winner Podium Button -->
+            <button onclick="openPodiumModal()" title="Show Quiz Leaderboard Podium" class="px-2.5 py-2 text-xs font-bold rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 cursor-pointer transition">
+              🏆 Podium
+            </button>
+
+            <button onclick="blastConfetti()" title="Celebrate with live confetti cannon" class="px-2.5 py-2 text-xs font-bold rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25 hover:bg-indigo-500/20 cursor-pointer transition">
+              🎉 Confetti
+            </button>
+
+            <button onclick="startStageTimer(30)" title="Start 30s countdown timer" class="px-2.5 py-2 text-xs font-bold rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 cursor-pointer transition">
+              ⏱️ 30s
+            </button>
+
+            <button id="toggleMultiVoteBtn" class="px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer">
+              🔒 1-Vote
+            </button>
+
+            <button id="showQrBtn" class="px-2.5 py-2 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 cursor-pointer">🔗 QR</button>
+            <a id="exportCsvBtn" href="#" class="px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-700 dark:text-slate-200 transition">⬇ CSV</a>
+            <button onclick="window.print()" title="Print or Save Slide as PDF" class="hidden sm:inline-block px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-700 dark:text-slate-200 cursor-pointer transition">🖨️ PDF</button>
+            <button id="toggleStatusBtn" class="px-3.5 py-2 text-xs font-extrabold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-md cursor-pointer transition">▶ Start</button>
+            <button id="closeVotingBtn" class="hidden px-3 py-2 text-xs font-extrabold rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-md cursor-pointer transition">⏹ Close</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- VIEW 3: BULK SLIDE EDITOR -->
+  <div id="editorView" class="hidden flex-grow w-full max-w-4xl mx-auto p-4 sm:p-8">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl space-y-6">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Slide Deck Bulk Studio</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Edit questions, Multiple Choice options, and Ranking items.</p>
+        </div>
+        <button id="closeEditorBtn" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer">← Back to Stage</button>
+      </div>
+      <div id="slidesEditorList" class="space-y-4 max-h-[65vh] overflow-y-auto pr-1"></div>
+      <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
+        <span class="text-xs text-slate-400">Tip: You can also edit options & items directly on the live stage!</span>
+        <button id="saveDeckBtn" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold rounded-xl shadow-lg cursor-pointer">Save All Changes ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUIZ LEADERBOARD PODIUM MODAL -->
+  <div id="podiumModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-lg flex items-center justify-center p-6">
+    <div class="bg-white dark:bg-slate-900 border-2 border-amber-500/40 rounded-3xl max-w-xl w-full p-8 text-center shadow-2xl space-y-6 anim-pop">
+      <div class="space-y-1">
+        <span class="text-xs font-extrabold uppercase tracking-widest text-amber-500">🏆 Live Quiz Leaderboard</span>
+        <h3 class="text-3xl font-black text-slate-900 dark:text-white">Top Performers</h3>
+      </div>
+      <div id="podiumList" class="space-y-3 text-left max-h-80 overflow-y-auto pr-1"></div>
+      <button onclick="closePodiumModal()" class="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-white rounded-xl text-xs font-extrabold cursor-pointer transition">
+        Close Podium
+      </button>
+    </div>
+  </div>
+
+  <!-- SPOTLIGHT FULLSCREEN MODAL -->
+  <div id="spotlightModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-lg flex items-center justify-center p-6">
+    <div class="bg-white dark:bg-slate-900 border-2 border-indigo-500/40 rounded-3xl max-w-3xl w-full p-8 sm:p-12 text-center shadow-2xl space-y-6 anim-pop relative">
+      <span id="spotlightBadge" class="inline-block text-xs font-extrabold uppercase tracking-widest px-3.5 py-1 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+        🔍 Audience Spotlight
+      </span>
+      <p id="spotlightContent" class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white leading-snug break-words"></p>
+      <p id="spotlightMeta" class="text-xs font-mono text-slate-400"></p>
+      <button onclick="closeSpotlight()" class="px-6 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-white rounded-xl text-xs font-extrabold cursor-pointer transition">
+        Close Spotlight (Esc)
+      </button>
+    </div>
+  </div>
+
+  <!-- REMOTE CLICKER MODAL -->
+  <div id="remoteModal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl space-y-5">
+      <div class="space-y-1">
+        <span class="text-xs font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Authenticated Presenter Remote</span>
+        <h3 class="text-xl font-black text-slate-900 dark:text-white">Control Stage from Your Phone</h3>
+      </div>
+      <div class="flex justify-center"><div id="remoteQrcode" class="bg-white p-3 rounded-2xl shadow-lg border border-slate-200 inline-block"></div></div>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Includes your secure Host Admin Token so only you can control slides.</p>
+      <div class="flex items-center space-x-2">
+        <input id="remoteModalLink" type="text" readonly class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-700 dark:text-slate-200" />
+        <button onclick="copyRemoteLink()" class="shrink-0 px-3.5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">Copy</button>
+      </div>
+      <button onclick="closeRemoteModal()" class="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold cursor-pointer">Done</button>
+    </div>
+  </div>
+
+  <!-- CREATE MODAL -->
+  <div id="createModal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5">
+      <h3 class="text-xl font-extrabold text-slate-900 dark:text-white">New Presentation</h3>
+      <form id="createForm" class="space-y-4">
+        <input id="newTitle" type="text" placeholder="e.g. Annual Town Hall 2026" required class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none" />
+        <div class="flex space-x-3 pt-2">
+          <button type="button" id="closeCreateModal" class="w-1/2 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold cursor-pointer">Cancel</button>
+          <button type="submit" class="w-1/2 py-3 bg-indigo-600 text-white rounded-xl text-sm font-extrabold shadow-lg cursor-pointer">Create →</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- QR MODAL -->
+  <div id="qrModal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl space-y-5">
+      <h3 class="text-2xl font-black text-slate-900 dark:text-white">Scan to Join & Vote</h3>
+      <div class="flex justify-center"><div id="qrcode" class="bg-white p-4 rounded-2xl shadow-lg border border-slate-200 inline-block"></div></div>
+      <span id="qrModalPinText" class="text-3xl font-mono font-black tracking-widest text-indigo-600 dark:text-indigo-400 block">------</span>
+      <div class="flex items-center space-x-2">
+        <input id="modalLink" type="text" readonly class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-700 dark:text-slate-200" />
+        <button id="copyModalLinkBtn" class="shrink-0 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">Copy</button>
+      </div>
+      <button id="closeQrModal" class="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-bold cursor-pointer">Close</button>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let currentSession = null;
+    let activeHostToken = null;
+    let slideCounter = 200;
+    let isFullscreenStage = false;
+    let isHostEditingInline = false;
+    let countdownInterval = null;
+    let lastKnownResultsHidden = null;
+    let sfxEnabled = true;
+    let audioCtx = null;
+    let idleDockTimer = null;
+
+    // Web Audio Synthesizer
+    function playStageSound(type) {
+      if (!sfxEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        if (type === 'tick') {
+          osc.frequency.setValueAtTime(880, now);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+          osc.start(now);
+          osc.stop(now + 0.08);
+        } else if (type === 'celebrate') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, now);
+          osc.frequency.setValueAtTime(659.25, now + 0.1);
+          osc.frequency.setValueAtTime(783.99, now + 0.2);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+          osc.start(now);
+          osc.stop(now + 0.45);
+        }
+      } catch (_) {}
+    }
+
+    window.toggleSoundEffects = () => {
+      sfxEnabled = !sfxEnabled;
+      const btn = document.getElementById('sfxToggleBtn');
+      btn.textContent = sfxEnabled ? '🔊 SFX' : '🔇 Muted';
+    };
+
+    function resetIdleDockTimer() {
+      const dock = document.getElementById('presenterDockWrap');
+      if (!dock) return;
+      dock.style.opacity = '1';
+      if (idleDockTimer) clearTimeout(idleDockTimer);
+      if (isFullscreenStage) {
+        idleDockTimer = setTimeout(() => {
+          if (!isHostEditingInline) dock.style.opacity = '0.15';
+        }, 3500);
+      }
+    }
+    window.addEventListener('mousemove', resetIdleDockTimer);
+
+    function initTheme() {
+      const savedTheme = localStorage.getItem('prajnix_theme') || 'dark';
+      if (savedTheme === 'light') document.documentElement.classList.remove('dark');
+      else document.documentElement.classList.add('dark');
+    }
+    initTheme();
+
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('prajnix_theme', isDark ? 'dark' : 'light');
+    });
+
+    window.blastConfetti = () => {
+      playStageSound('celebrate');
+      if (typeof confetti === 'function') {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      }
+      if (currentSession) {
+        socket.emit('trigger_confetti', { pin: currentSession.pin });
+      }
+    };
+
+    // Quiz Leaderboard Podium Modal
+    window.openPodiumModal = () => {
+      if (!currentSession) return;
+      const scoresMap = {};
+      (currentSession.slides || []).forEach((sl) => {
+        if (sl.type === 'MULTIPLE_CHOICE' && Array.isArray(sl.responses)) {
+          sl.responses.forEach((r) => {
+            if (!scoresMap[r.voterId]) {
+              scoresMap[r.voterId] = { name: r.voterName || 'Anonymous', avatar: r.voterAvatar || '🦁', points: 0, correctCount: 0 };
+            }
+            if (r.isCorrect) {
+              scoresMap[r.voterId].points += (r.points || 100);
+              scoresMap[r.voterId].correctCount += 1;
+            }
+          });
+        }
+      });
+
+      const sorted = Object.values(scoresMap).sort((a, b) => b.points - a.points).slice(0, 5);
+      const listEl = document.getElementById('podiumList');
+      if (sorted.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No quiz points recorded yet. Mark a Multiple Choice option as ✓ Correct and let voters answer!</p>`;
+      } else {
+        const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+        listEl.innerHTML = sorted.map((p, idx) => `
+          <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <span class="text-2xl">${medals[idx] || '🏅'}</span>
+              <div>
+                <p class="text-sm font-black text-slate-900 dark:text-white">${p.avatar} ${p.name}</p>
+                <span class="text-[11px] text-slate-400">${p.correctCount} correct answer(s)</span>
+              </div>
+            </div>
+            <span class="px-3.5 py-1.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 font-mono text-sm font-black">
+              ${p.points} pts
+            </span>
+          </div>
+        `).join('');
+        blastConfetti();
+      }
+      document.getElementById('podiumModal').classList.remove('hidden');
+    };
+    window.closePodiumModal = () => document.getElementById('podiumModal').classList.add('hidden');
+
+    window.openRemoteModal = () => {
+      if (!currentSession) return;
+      const keyParam = activeHostToken ? `&key=${activeHostToken}` : '';
+      const remoteUrl = `${window.location.origin}/remote?pin=${currentSession.pin}${keyParam}`;
+      document.getElementById('remoteModalLink').value = remoteUrl;
+      document.getElementById('remoteQrcode').innerHTML = '';
+      new QRCode(document.getElementById('remoteQrcode'), { text: remoteUrl, width: 160, height: 160 });
+      document.getElementById('remoteModal').classList.remove('hidden');
+    };
+    window.closeRemoteModal = () => document.getElementById('remoteModal').classList.add('hidden');
+    window.copyRemoteLink = () => {
+      navigator.clipboard.writeText(document.getElementById('remoteModalLink').value);
+      alert('Authenticated Remote Clicker link copied!');
+    };
+
+    window.deletePresentation = async (pin, event) => {
+      if (event) event.stopPropagation();
+      const cleanPin = String(pin || '').trim();
+      if (!cleanPin) return alert('Session PIN not found.');
+
+      const confirmed = confirm(`Are you sure you want to permanently delete presentation #${cleanPin} and all its data?`);
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch(`/api/sessions/${cleanPin}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+
+        if (res.ok && data.success) {
+          if (currentSession && String(currentSession.pin) === cleanPin) {
+            returnToHub();
+          } else {
+            loadHub();
+          }
+        } else {
+          alert(data.error || `Server error (${res.status}).`);
+        }
+      } catch (err) {
+        console.error('Delete presentation error:', err);
+        alert('Could not connect to server.');
+      }
+    };
+
+    window.deleteCurrentPresentation = () => {
+      if (!currentSession || !currentSession.pin) return;
+      window.deletePresentation(currentSession.pin);
+    };
+
+    const SLIDE_DESCRIPTIONS = {
+      'MULTIPLE_CHOICE': '📊 Multiple Choice: Give audience 2+ options. Supports Live Quiz Mode (mark ✓ Correct option for points).',
+      'WORD_CLOUD': '☁️ Word Cloud: Audience submits words. Most popular words automatically grow larger in a multi-color cloud.',
+      'RATING_SLIDER': '🎚️ Rating Slider: 1 to 5 interactive emoji slider with live crowd average score and written feedback feed.',
+      'OPEN_ENDED': '💬 Open Ended: Audience types full sentences or ideas that appear live as floating speech cards on stage.',
+      'RANKING': '🏆 Ranking Poll: Define items for voters to rank (1st, 2nd, 3rd...). Computes a live sorted leaderboard.',
+      'QA': '🙋 Live Q&A Board: Audience submits questions in real time and upvotes existing questions.'
+    };
+
+    window.showSlideTooltip = (type) => {
+      const box = document.getElementById('slideInfoTooltipBox');
+      if (box && SLIDE_DESCRIPTIONS[type]) box.innerHTML = SLIDE_DESCRIPTIONS[type];
+    };
+
+    window.toggleNewSlideMenu = () => {
+      const menu = document.getElementById('newSlideMenuPopup');
+      const plusIcon = document.getElementById('plusIconSvg');
+      const btnText = document.getElementById('newSlideBtnText');
+      const chevron = document.getElementById('chevronSvg');
+      const isOpen = !menu.classList.contains('hidden');
+
+      if (isOpen) {
+        menu.classList.add('hidden');
+        plusIcon.style.transform = 'rotate(0deg)';
+        chevron.style.transform = 'rotate(0deg)';
+        btnText.textContent = 'New Slide';
+      } else {
+        menu.classList.remove('hidden');
+        plusIcon.style.transform = 'rotate(45deg)';
+        chevron.style.transform = 'rotate(180deg)';
+        btnText.textContent = 'Close Menu';
+      }
+    };
+
+    window.addNewSlide = async (type) => {
+      if (!currentSession) return;
+      toggleNewSlideMenu();
+      slideCounter++;
+      const now = Date.now();
+      
+      const newSlide = {
+        id: `slide_${now}_${slideCounter}`,
+        type,
+        question: type === 'MULTIPLE_CHOICE' ? 'Which option do you prefer most?'
+                : type === 'OPEN_ENDED' ? 'Share your thoughts or ideas with us:'
+                : type === 'RANKING' ? 'Rank these priorities from most to least important:'
+                : type === 'QA' ? 'Ask us anything! Submit or upvote questions below:'
+                : type === 'WORD_CLOUD' ? 'What single word comes to mind?'
+                : 'How would you rate this overall?',
+        minLabel: '1 = Bad',
+        maxLabel: '5 = Good',
+        distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        options: type === 'MULTIPLE_CHOICE' ? [
+          { id: `opt_${now}_1`, text: 'Option A', votes: 0, isCorrect: false },
+          { id: `opt_${now}_2`, text: 'Option B', votes: 0, isCorrect: false },
+          { id: `opt_${now}_3`, text: 'Option C', votes: 0, isCorrect: false }
+        ] : [],
+        items: type === 'RANKING' ? [
+          { id: `item_${now}_1`, text: 'Speed & Performance' },
+          { id: `item_${now}_2`, text: 'Ease of Use (UI/UX)' },
+          { id: `item_${now}_3`, text: 'New Features' }
+        ] : [],
+        responses: [],
+        words: [],
+        questions: []
+      };
+
+      currentSession.slides.push(newSlide);
+      currentSession.currentSlideIndex = currentSession.slides.length - 1;
+      await updateSessionState();
+    };
+
+    window.spotlightItem = (slideId, type, itemId) => {
+      if (!currentSession) return;
+      const slide = (currentSession.slides || []).find((s) => s.id === slideId);
+      if (!slide) return;
+
+      if (type === 'OPEN_ENDED') {
+        const r = (slide.responses || []).find((x) => x.id === itemId);
+        if (r) openSpotlight(r.text, `${r.voterAvatar || '👤'} ${r.voterName || 'Anonymous'} · Response`, '💬 Open Ended Spotlight');
+      } else if (type === 'QA') {
+        const q = (slide.questions || []).find((x) => x.id === itemId);
+        if (q) openSpotlight(q.text, `${q.voterAvatar || '👤'} ${q.voterName || 'Anonymous'} · 👍 ${q.upvotes || 0} Upvotes`, '🙋 Live Q&A Spotlight');
+      } else if (type === 'SUGGESTION') {
+        const r = (slide.responses || []).find((x) => x.id === itemId);
+        if (r) openSpotlight(r.suggestion, `${r.voterAvatar || '👤'} ${r.voterName || 'Anonymous'} · Rating: ${r.rating}/5`, '💬 Voter Suggestion');
+      }
+    };
+
+    window.openSpotlight = (text, meta, badgeText = '🔍 Audience Spotlight') => {
+      document.getElementById('spotlightBadge').textContent = badgeText;
+      document.getElementById('spotlightContent').textContent = text;
+      document.getElementById('spotlightMeta').textContent = meta || '';
+      document.getElementById('spotlightModal').classList.remove('hidden');
+    };
+    window.closeSpotlight = () => document.getElementById('spotlightModal').classList.add('hidden');
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSpotlight(); closePodiumModal(); } });
+
+    window.moderateItem = async (slideId, itemType, itemId, event) => {
+      if (event) event.stopPropagation();
+      if (!currentSession) return;
+      await fetch(`/api/sessions/${currentSession.pin}/moderate`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-host-token': activeHostToken || '' },
+        body: JSON.stringify({ slideId, itemType, itemId })
+      });
+    };
+
+    window.startStageTimer = async (seconds) => {
+      if (!currentSession) return;
+      await fetch(`/api/sessions/${currentSession.pin}/timer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-host-token': activeHostToken || '' },
+        body: JSON.stringify({ seconds })
+      });
+    };
+
+    let lastTickSec = null;
+    function syncCountdownUI(session) {
+      const wrap = document.getElementById('stageTimerWrap');
+      const textEl = document.getElementById('stageTimerText');
+      const barEl = document.getElementById('stageTimerBar');
+
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+
+      if (!session || !session.timerEndsAt || session.timerEndsAt <= Date.now()) {
+        wrap.classList.add('hidden');
+        return;
+      }
+
+      wrap.classList.remove('hidden');
+      const totalMs = Math.max(1000, (session.timerDuration || 30) * 1000);
+
+      const tick = () => {
+        const remMs = Math.max(0, session.timerEndsAt - Date.now());
+        const remSec = Math.ceil(remMs / 1000);
+        if (remSec <= 5 && remSec > 0 && remSec !== lastTickSec) {
+          lastTickSec = remSec;
+          playStageSound('tick');
+        }
+        const mins = String(Math.floor(remSec / 60)).padStart(2, '0');
+        const secs = String(remSec % 60).padStart(2, '0');
+        textEl.textContent = `${mins}:${secs}`;
+        barEl.style.width = `${Math.min(100, (remMs / totalMs) * 100)}%`;
+        if (remMs <= 0) {
+          clearInterval(countdownInterval);
+          wrap.classList.add('hidden');
+        }
+      };
+
+      tick();
+      countdownInterval = setInterval(tick, 250);
+    }
+
+    window.addMcOptionOnStage = async () => {
+      if (!currentSession) return;
+      const slide = currentSession.slides[currentSession.currentSlideIndex];
+      if (!slide || slide.type !== 'MULTIPLE_CHOICE') return;
+      if (!Array.isArray(slide.options)) slide.options = [];
+      const nextLetter = String.fromCharCode(65 + slide.options.length);
+      slide.options.push({
+        id: `opt_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+        text: `Option ${nextLetter}`,
+        votes: 0,
+        isCorrect: false
+      });
+      await updateSessionState();
+    };
+
+    window.toggleMcCorrectById = async (optId) => {
+      if (!currentSession) return;
+      const slide = currentSession.slides[currentSession.currentSlideIndex];
+      if (!slide || !Array.isArray(slide.options)) return;
+      const opt = slide.options.find((o) => o.id === optId);
+      if (!opt) return;
+      opt.isCorrect = !opt.isCorrect;
+      await updateSessionState();
+    };
+
+    window.updateMcOptionById = async (optId, newText) => {
+      isHostEditingInline = false;
+      if (!currentSession) return;
+      const slide = currentSession.slides[currentSession.currentSlideIndex];
+      if (!slide || !Array.isArray(slide.options)) return;
+      const opt = slide.options.find((o) => o.id === optId);
+      if (!opt) return;
+      const clean = newText.trim();
+      if (clean && clean !== opt.text) {
+        opt.text = clean;
+        await updateSessionState();
+      } else {
+        renderStageCanvas();
+      }
+    };
+
+    window.deleteMcOptionById = async (optId) => {
+      if (!currentSession) return;
+      const slide = currentSession.slides[currentSession.currentSlideIndex];
+      if (!slide || !Array.isArray(slide.options)) return;
+      if (slide.options.length <= 2) return alert('Multiple Choice needs at least 2 options.');
+      slide.options = slide.options.filter((o) => o.id !== optId);
+      await updateSessionState();
+    };
+
+    window.addRankingItemOnStage = async () => {
+      if (!currentSession) return;
+      const slide = currentSession.slides[currentSession.currentSlideIndex];
+      if (!slide || slide.type !== 'RANKING') return;
+      if (!Array.isArray(slide.items)) slide.items = [];
+      slide.items.push({
+        id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+        text: `Priority Item #${slide.items.length + 1}`
+      });
+      await updateSessionState();
+    };
+
+    window.updateRankingItemById = async (itemId, newText) => {
+      isHostEditingInline = false;
+      if (!currentSession) return;
+      const slide = currentSession.slides[currentSession.currentSlideIndex];
+      if (!slide || !Array.isArray(slide.items)) return;
+      const item = slide.items.find((it) => it.id === itemId);
+      if (!item) return;
+      const clean = newText.trim();
+      if (clean && clean !== item.text) {
+        item.text = clean;
+        await updateSessionState();
+      } else {
+        renderStageCanvas();
+      }
+    };
+
+    window.deleteRankingItemById = async (itemId) => {
+      if (!currentSession) return;
+      const slide = currentSession.slides[currentSession.currentSlideIndex];
+      if (!slide || !Array.isArray(slide.items)) return;
+      if (slide.items.length <= 2) return alert('Ranking poll needs at least 2 items.');
+      slide.items = slide.items.filter((it) => it.id !== itemId);
+      await updateSessionState();
+    };
+
+    async function loadHub() {
+      try {
+        const res = await fetch('/api/sessions');
+        const sessions = await res.json();
+        const grid = document.getElementById('sessionsGrid');
+        const countBadge = document.getElementById('hubCountBadge');
+        grid.innerHTML = '';
+        countBadge.textContent = `${sessions.length} Presentation(s)`;
+
+        if (sessions.length === 0) {
+          grid.innerHTML = `<div class="col-span-full bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-3xl p-12 text-center space-y-3"><div class="text-3xl">📊</div><h3 class="text-base font-bold text-slate-800 dark:text-white">No presentations yet</h3><p class="text-xs text-slate-400">Click "+ New Presentation" to launch your first session.</p></div>`;
+          return;
+        }
+
+        sessions.forEach((s) => {
+          if (s.hostToken) {
+            localStorage.setItem(`prajnix_host_token_${s.pin}`, s.hostToken);
+          }
+          grid.innerHTML += `
+            <div class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 rounded-3xl p-6 flex flex-col justify-between space-y-5 shadow-sm hover:shadow-xl transition">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-indigo-100 dark:border-slate-800">PIN: ${s.pin}</span>
+                  <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">${s.status}</span>
+                </div>
+                <h3 class="text-lg font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-500 transition line-clamp-1">${s.title}</h3>
+                <p class="text-xs text-slate-400">📑 ${s.slides.length} slides included</p>
+              </div>
+              <div class="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center space-x-2">
+                <button onclick="openStage('${s.pin}')" class="flex-grow py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-sm">
+                  Open Studio & Stage →
+                </button>
+                <button onclick="deletePresentation('${s.pin}', event)" title="Delete presentation permanently" class="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 transition cursor-pointer shrink-0">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+              </div>
+            </div>
+          `;
+        });
+      } catch (err) { console.error('Failed to load sessions:', err); }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadHub();
+      document.getElementById('topBannerUrl').textContent = `${window.location.host}/vote`;
+
+      const openModalBtn = document.getElementById('openCreateModal');
+      const createModal = document.getElementById('createModal');
+      const closeModalBtn = document.getElementById('closeCreateModal');
+      const createForm = document.getElementById('createForm');
+
+      if (openModalBtn && createModal) openModalBtn.addEventListener('click', () => createModal.classList.remove('hidden'));
+      if (closeModalBtn && createModal) closeModalBtn.addEventListener('click', () => createModal.classList.add('hidden'));
+      if (createForm) {
+        createForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const title = document.getElementById('newTitle').value.trim();
+          const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+          const data = await res.json();
+          if (res.ok && data.session) {
+            if (data.session.hostToken) {
+              localStorage.setItem(`prajnix_host_token_${data.session.pin}`, data.session.hostToken);
+            }
+            createModal.classList.add('hidden');
+            document.getElementById('newTitle').value = '';
+            openStage(data.session.pin);
+          }
+        });
+      }
+    });
+
+    const mobileSlideMenuBtn = document.getElementById('mobileSlideMenuBtn');
+    const leftSlideRail = document.getElementById('leftSlideRail');
+    const mobileSidebarBackdrop = document.getElementById('mobileSidebarBackdrop');
+
+    function toggleMobileSidebar(show) {
+      if (show) { leftSlideRail.classList.remove('-translate-x-full'); mobileSidebarBackdrop.classList.remove('hidden'); }
+      else { leftSlideRail.classList.add('-translate-x-full'); mobileSidebarBackdrop.classList.add('hidden'); }
+    }
+    if (mobileSlideMenuBtn) mobileSlideMenuBtn.addEventListener('click', () => toggleMobileSidebar(leftSlideRail.classList.contains('-translate-x-full')));
+    if (mobileSidebarBackdrop) mobileSidebarBackdrop.addEventListener('click', () => toggleMobileSidebar(false));
+
+    document.getElementById('fullscreenStageBtn').addEventListener('click', () => {
+      isFullscreenStage = !isFullscreenStage;
+      const rail = document.getElementById('leftSlideRail');
+      const fsText = document.getElementById('fsBtnText');
+      if (isFullscreenStage) { rail.classList.add('md:hidden'); fsText.textContent = 'Exit Present'; resetIdleDockTimer(); }
+      else { rail.classList.remove('md:hidden'); fsText.textContent = 'Present'; document.getElementById('presenterDockWrap').style.opacity = '1'; }
+    });
+
+    window.openStage = (pin) => {
+      activeHostToken = localStorage.getItem(`prajnix_host_token_${pin}`) || '';
+      socket.emit('join_session', { pin, isHost: true });
+      document.getElementById('hubView').classList.add('hidden');
+      document.getElementById('editorView').classList.add('hidden');
+      document.getElementById('stageView').classList.remove('hidden');
+      document.getElementById('activeHeader').classList.remove('hidden');
+      document.getElementById('topJoinBanner').classList.remove('hidden');
+      document.getElementById('mobileSlideMenuBtn').classList.remove('hidden');
+      document.getElementById('pinBadge').textContent = pin;
+      document.getElementById('mobilePinBadge').textContent = `PIN: ${pin}`;
+      document.getElementById('exportCsvBtn').href = `/api/sessions/${pin}/export-csv`;
+    };
+
+    function returnToHub() {
+      currentSession = null;
+      document.getElementById('stageView').classList.add('hidden');
+      document.getElementById('editorView').classList.add('hidden');
+      document.getElementById('activeHeader').classList.add('hidden');
+      document.getElementById('topJoinBanner').classList.add('hidden');
+      document.getElementById('mobileSlideMenuBtn').classList.add('hidden');
+      document.getElementById('hubView').classList.remove('hidden');
+      toggleMobileSidebar(false);
+      loadHub();
+    }
+
+    document.getElementById('backHubBtn').addEventListener('click', returnToHub);
+    document.getElementById('brandHomeClick').addEventListener('click', returnToHub);
+
+    function openQrModal() {
+      if (!currentSession) return;
+      document.getElementById('qrModal').classList.remove('hidden');
+      const url = `${window.location.origin}/vote?pin=${currentSession.pin}`;
+      document.getElementById('modalLink').value = url;
+      document.getElementById('qrModalPinText').textContent = currentSession.pin;
+      document.getElementById('qrcode').innerHTML = '';
+      new QRCode(document.getElementById('qrcode'), { text: url, width: 190, height: 190 });
+    }
+
+    document.getElementById('showQrBtn').addEventListener('click', openQrModal);
+    document.getElementById('topQrTrigger').addEventListener('click', openQrModal);
+    document.getElementById('closeQrModal').addEventListener('click', () => document.getElementById('qrModal').classList.add('hidden'));
+
+    document.getElementById('copyModalLinkBtn').addEventListener('click', () => {
+      navigator.clipboard.writeText(document.getElementById('modalLink').value);
+      const btn = document.getElementById('copyModalLinkBtn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    });
+
+    document.getElementById('toggleMultiVoteBtn').addEventListener('click', async () => {
+      if (!currentSession) return;
+      await fetch(`/api/sessions/${currentSession.pin}/multi-vote`, { method: 'POST', headers: { 'x-host-token': activeHostToken || '' } });
+    });
+
+    document.getElementById('togglePacingBtn').addEventListener('click', async () => {
+      if (!currentSession) return;
+      const nextPacing = currentSession.pacingMode === 'HOST' ? 'SELF' : 'HOST';
+      await fetch(`/api/sessions/${currentSession.pin}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-host-token': activeHostToken || '' },
+        body: JSON.stringify({ pacingMode: nextPacing })
+      });
+    });
+
+    document.getElementById('toggleHideResultsBtn').addEventListener('click', async () => {
+      if (!currentSession) return;
+      const nextState = !currentSession.hideResults;
+      if (!nextState && currentSession.hideResults) {
+        blastConfetti();
+      }
+      await fetch(`/api/sessions/${currentSession.pin}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-host-token': activeHostToken || '' },
+        body: JSON.stringify({ hideResults: nextState })
+      });
+    });
+
+    document.getElementById('toggleStatusBtn').addEventListener('click', async () => {
+      if (!currentSession) return;
+      let nextStatus = currentSession.status === 'LIVE' ? 'PAUSED' : 'LIVE';
+      if (currentSession.status === 'DRAFT') { nextStatus = 'LIVE'; openQrModal(); }
+      await fetch(`/api/sessions/${currentSession.pin}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-host-token': activeHostToken || '' },
+        body: JSON.stringify({ status: nextStatus })
+      });
+    });
+
+    document.getElementById('closeVotingBtn').addEventListener('click', async () => {
+      if (!currentSession) return;
+      await fetch(`/api/sessions/${currentSession.pin}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-host-token': activeHostToken || '' },
+        body: JSON.stringify({ status: 'CLOSED' })
+      });
+    });
+
+    document.getElementById('prevSlideBtn').addEventListener('click', async () => {
+      if (currentSession && currentSession.currentSlideIndex > 0) {
+        isHostEditingInline = false;
+        currentSession.currentSlideIndex--;
+        await updateSessionState();
+      }
+    });
+
+    document.getElementById('nextSlideBtn').addEventListener('click', async () => {
+      if (currentSession && currentSession.currentSlideIndex < currentSession.slides.length - 1) {
+        isHostEditingInline = false;
+        currentSession.currentSlideIndex++;
+        await updateSessionState();
+      }
+    });
+
+    window.selectSlideFromSidebar = async (idx) => {
+      if (!currentSession) return;
+      isHostEditingInline = false;
+      currentSession.currentSlideIndex = idx;
+      toggleMobileSidebar(false);
+      await updateSessionState();
+    };
+
+    window.deleteSlideFromSidebar = async (idx, event) => {
+      event.stopPropagation();
+      if (!currentSession || currentSession.slides.length <= 1) return alert('Presentation must have at least 1 slide.');
+      currentSession.slides.splice(idx, 1);
+      if (currentSession.currentSlideIndex >= currentSession.slides.length) currentSession.currentSlideIndex = currentSession.slides.length - 1;
+      await updateSessionState();
+    };
+
+    window.saveInlineQuestion = async (newQuestionText) => {
+      isHostEditingInline = false;
+      if (!currentSession) return;
+      const activeSlide = currentSession.slides[currentSession.currentSlideIndex];
+      if (!activeSlide) return;
+      const trimmed = newQuestionText.trim();
+      if (trimmed && trimmed !== activeSlide.question) {
+        activeSlide.question = trimmed;
+        await updateSessionState();
+      } else {
+        renderStageCanvas();
+      }
+    };
+
+    async function updateSessionState() {
+      await fetch(`/api/sessions/${currentSession.pin}/slide`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-host-token': activeHostToken || '' },
+        body: JSON.stringify({ currentSlideIndex: currentSession.currentSlideIndex, slides: currentSession.slides })
+      });
+    }
+
+    // Bulk Slide Editor
+    document.getElementById('editDeckBtn').addEventListener('click', () => {
+      toggleMobileSidebar(false);
+      document.getElementById('stageView').classList.add('hidden');
+      document.getElementById('editorView').classList.remove('hidden');
+      renderEditor();
+    });
+    document.getElementById('closeEditorBtn').addEventListener('click', () => {
+      document.getElementById('editorView').classList.add('hidden');
+      document.getElementById('stageView').classList.remove('hidden');
+    });
+
+    window.renderEditor = () => {
+      const list = document.getElementById('slidesEditorList');
+      list.innerHTML = '';
+      currentSession.slides.forEach((s, idx) => {
+        let extraConfigHTML = '';
+
+        if (s.type === 'MULTIPLE_CHOICE') {
+          const optsRows = (s.options || []).map((o, oIdx) => `
+            <div class="flex items-center space-x-2">
+              <input type="text" value="${o.text.replace(/"/g, '&quot;')}" oninput="currentSession.slides[${idx}].options[${oIdx}].text = this.value" class="flex-grow px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white" />
+              <button type="button" onclick="currentSession.slides[${idx}].options.splice(${oIdx}, 1); renderEditor();" class="text-rose-500 text-xs font-bold px-2">✕</button>
+            </div>
+          `).join('');
+          extraConfigHTML = `
+            <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase text-slate-400">Poll Options</span>
+                <button type="button" onclick="currentSession.slides[${idx}].options.push({id:'opt_'+Date.now(), text:'New Option', votes:0, isCorrect:false}); renderEditor();" class="text-xs font-bold text-indigo-500">+ Add Option</button>
+              </div>
+              ${optsRows}
+            </div>
+          `;
+        } else if (s.type === 'RANKING') {
+          const itemRows = (s.items || []).map((it, iIdx) => `
+            <div class="flex items-center space-x-2">
+              <input type="text" value="${it.text.replace(/"/g, '&quot;')}" oninput="currentSession.slides[${idx}].items[${iIdx}].text = this.value" class="flex-grow px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white" />
+              <button type="button" onclick="currentSession.slides[${idx}].items.splice(${iIdx}, 1); renderEditor();" class="text-rose-500 text-xs font-bold px-2">✕</button>
+            </div>
+          `).join('');
+          extraConfigHTML = `
+            <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold uppercase text-slate-400">Ranking Items</span>
+                <button type="button" onclick="currentSession.slides[${idx}].items.push({id:'item_'+Date.now(), text:'New Priority Item'}); renderEditor();" class="text-xs font-bold text-sky-500">+ Add Ranking Item</button>
+              </div>
+              ${itemRows}
+            </div>
+          `;
+        }
+
+        list.innerHTML += `
+          <div class="bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <div class="flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400">
+              <span>Slide ${idx + 1} (${s.type})</span>
+              ${currentSession.slides.length > 1 ? `<button onclick="currentSession.slides.splice(${idx}, 1); renderEditor();" class="text-rose-500 cursor-pointer">Delete Slide</button>` : ''}
+            </div>
+            <input type="text" value="${s.question.replace(/"/g, '&quot;')}" oninput="currentSession.slides[${idx}].question = this.value" class="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none" />
+            ${extraConfigHTML}
+          </div>
+        `;
+      });
+    };
+
+    document.getElementById('saveDeckBtn').addEventListener('click', async () => {
+      await updateSessionState();
+      document.getElementById('editorView').classList.add('hidden');
+      document.getElementById('stageView').classList.remove('hidden');
+    });
+
+    socket.on('room_count', (count) => {
+      document.getElementById('onlineCountBadge').textContent = `${count} Online`;
+      const mob = document.getElementById('mobileOnlineBadge');
+      if (mob) mob.textContent = `🟢 ${count}`;
+    });
+
+    socket.on('live_reaction', ({ emoji }) => {
+      const el = document.createElement('div');
+      el.className = 'floating-emoji select-none';
+      el.textContent = emoji;
+      const rightOffset = 28 + Math.floor(Math.random() * 140);
+      el.style.right = `${rightOffset}px`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2900);
+    });
+
+    socket.on('celebrate_confetti', () => {
+      playStageSound('celebrate');
+      if (typeof confetti === 'function') {
+        confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
+      }
+    });
+
+    const SCORE_NAMES = { 1: '1 · Bad', 2: '2 · Poor', 3: '3 · Neutral', 4: '4 · Good', 5: '5 · Very Good' };
+    const BAR_COLORS = {
+      1: 'from-rose-500 to-rose-600',
+      2: 'from-orange-500 to-amber-500',
+      3: 'from-amber-400 to-yellow-500',
+      4: 'from-teal-400 to-emerald-400',
+      5: 'from-emerald-500 to-green-500'
+    };
+    const CLOUD_PALETTE = [
+      'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/25',
+      'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
+      'text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/25',
+      'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/25',
+      'text-violet-600 dark:text-violet-400 bg-violet-500/10 border-violet-500/25',
+      'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/25'
+    ];
+
+    function wrapWithPrivacyBlur(innerHtml, isHidden, voteCount) {
+      if (!isHidden) return innerHtml;
+      return `
+        <div class="relative rounded-2xl overflow-hidden">
+          <div class="blur-xl select-none pointer-events-none opacity-40 transition-all duration-500">
+            ${innerHtml}
+          </div>
+          <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/30 dark:bg-slate-950/50 backdrop-blur-md rounded-2xl p-6 text-center space-y-2">
+            <div class="text-3xl">🔒</div>
+            <p class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Results Hidden to Prevent Bias</p>
+            <p class="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">${voteCount} response(s) received so far</p>
+            <button onclick="document.getElementById('toggleHideResultsBtn').click()" class="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold rounded-xl shadow-lg cursor-pointer transition">
+              ✨ Reveal Results Now
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderStageCanvas() {
+      if (!currentSession) return;
+      const s = currentSession;
+      const canvas = document.getElementById('slideCanvas');
+      canvas.innerHTML = '';
+      const slide = s.slides[s.currentSlideIndex] || s.slides[0];
+
+      // 1. RATING SLIDER STAGE
+      if (slide.type === 'RATING_SLIDER') {
+        const total = (slide.responses || []).length;
+        const sum = (slide.responses || []).reduce((acc, r) => acc + (Number(r.rating) || 0), 0);
+        const avg = total > 0 ? sum / total : 0;
+
+        let barsHTML = '';
+        for (let i = 5; i >= 1; i--) {
+          const count = (slide.distribution && slide.distribution[i]) || 0;
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          barsHTML += `
+            <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 flex items-center space-x-4">
+              <div class="w-28 sm:w-32 text-xs sm:text-sm font-extrabold text-slate-700 dark:text-slate-200">${SCORE_NAMES[i]}</div>
+              <div class="flex-grow bg-slate-200 dark:bg-slate-900 h-5 rounded-full overflow-hidden p-0.5">
+                <div class="bg-gradient-to-r ${BAR_COLORS[i]} h-full rounded-full transition-all duration-700" style="width: ${pct}%"></div>
+              </div>
+              <div class="w-20 sm:w-24 text-right text-xs sm:text-sm font-mono font-bold text-slate-600 dark:text-slate-300">${count} (${pct}%)</div>
+            </div>
+          `;
+        }
+
+        const suggestions = (slide.responses || []).filter((r) => r.suggestion && r.suggestion.length > 0);
+        const suggestionsHTML = suggestions.length > 0
+          ? suggestions.map((r) => `
+              <div
+                onclick="spotlightItem('${slide.id}', 'SUGGESTION', '${r.id}')"
+                class="group bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 rounded-2xl p-3.5 space-y-1 cursor-pointer transition"
+                title="Click to spotlight on screen"
+              >
+                <div class="flex items-center justify-between text-[11px] font-bold">
+                  <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">${r.voterAvatar || '👤'} ${r.voterName || 'Anonymous'} (★${r.rating})</span>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-slate-400 font-mono">${new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <button onclick="moderateItem('${slide.id}', 'SUGGESTION', '${r.id}', event)" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 font-bold">✕</button>
+                  </div>
+                </div>
+                <p class="text-xs sm:text-sm text-slate-700 dark:text-slate-200">${r.suggestion}</p>
+              </div>
+            `).reverse().join('')
+          : '<p class="text-xs text-slate-400 text-center py-10">No suggestions submitted yet.</p>';
+
+        const statsBlock = `
+          <div class="space-y-5">
+            <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Crowd Average Score</span>
+              <span class="text-4xl font-black text-indigo-600 dark:text-indigo-400">${avg.toFixed(1)} <span class="text-base text-slate-400">/ 5.0</span></span>
+            </div>
+            <div class="space-y-2.5">${barsHTML}</div>
+          </div>
+        `;
+
+        canvas.innerHTML = `
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            <div class="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full">🎚️ Rating Slider</span>
+                <span class="text-xs font-mono font-bold text-slate-500">👥 ${total} Vote(s)</span>
+              </div>
+              <h3 contenteditable="true" onfocus="isHostEditingInline=true" onblur="saveInlineQuestion(this.innerText)" class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white outline-none cursor-text">${slide.question}</h3>
+              ${wrapWithPrivacyBlur(statsBlock, s.hideResults, total)}
+            </div>
+            <div class="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl flex flex-col justify-between">
+              <div class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                  <h4 class="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">💬 Suggestions (Click to Zoom)</h4>
+                  <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">${suggestions.length}</span>
+                </div>
+                <div class="space-y-3 max-h-[420px] overflow-y-auto pr-1">${suggestionsHTML}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // 2. WORD CLOUD STAGE
+      else if (slide.type === 'WORD_CLOUD') {
+        const freq = {};
+        (slide.words || []).forEach((w) => {
+          const clean = (w.word || '').toLowerCase();
+          if (clean) freq[clean] = (freq[clean] || 0) + 1;
+        });
+        const entries = Object.entries(freq);
+        const tagsHTML = entries.length > 0
+          ? entries.map(([word, count], idx) => {
+              const rot = count > 2 && idx % 4 === 0 ? '-rotate-3' : idx % 5 === 0 ? 'rotate-3' : 'rotate-0';
+              return `
+                <span class="anim-pop ${rot} px-4 py-2 border rounded-2xl font-black m-1.5 inline-flex items-center space-x-1.5 ${CLOUD_PALETTE[idx % CLOUD_PALETTE.length]}" style="font-size: ${Math.min(3.6, 1.15 + count * 0.45)}rem">
+                  <span>${word}</span>
+                  <sup class="text-xs font-mono opacity-75">×${count}</sup>
+                </span>
+              `;
+            }).join('')
+          : '<p class="text-slate-400 text-sm py-16">☁️ Waiting for audience to submit words...</p>';
+
+        const cloudBox = `<div class="flex flex-wrap gap-3 items-center justify-center min-h-[340px] p-6 bg-slate-50 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800">${tagsHTML}</div>`;
+
+        canvas.innerHTML = `
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 space-y-6 shadow-xl text-center">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-violet-600 dark:text-violet-400 bg-violet-500/10 px-3 py-1 rounded-full">☁️ Live Word Cloud</span>
+              <span class="text-xs font-mono font-bold text-slate-500">${(slide.words || []).length} Word(s)</span>
+            </div>
+            <h3 contenteditable="true" onfocus="isHostEditingInline=true" onblur="saveInlineQuestion(this.innerText)" class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white outline-none cursor-text">${slide.question}</h3>
+            ${wrapWithPrivacyBlur(cloudBox, s.hideResults, (slide.words || []).length)}
+          </div>
+        `;
+      }
+
+      // 3. MULTIPLE CHOICE STAGE
+      else if (slide.type === 'MULTIPLE_CHOICE') {
+        const options = slide.options || [];
+        const total = options.reduce((acc, o) => acc + (Number(o.votes) || 0), 0);
+
+        const optsHTML = options.map((o, idx) => {
+          const votes = Number(o.votes) || 0;
+          const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
+          const isCorr = Boolean(o.isCorrect);
+          return `
+            <div class="bg-slate-50 dark:bg-slate-950 border ${isCorr && !s.hideResults ? 'border-emerald-500 ring-1 ring-emerald-500/30' : 'border-slate-200 dark:border-slate-800'} rounded-2xl p-4 space-y-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center space-x-2.5 flex-grow">
+                  <span class="w-7 h-7 rounded-lg ${isCorr && !s.hideResults ? 'bg-emerald-500 text-white' : 'bg-indigo-600/15 text-indigo-600 dark:text-indigo-400'} font-mono text-xs font-black flex items-center justify-center shrink-0">
+                    ${String.fromCharCode(65 + idx)}
+                  </span>
+                  <input
+                    type="text"
+                    value="${o.text.replace(/"/g, '&quot;')}"
+                    onfocus="isHostEditingInline=true"
+                    onblur="updateMcOptionById('${o.id}', this.value)"
+                    title="Click to rename option"
+                    class="font-bold text-sm sm:text-base text-slate-900 dark:text-white bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full"
+                  />
+                </div>
+                <div class="flex items-center space-x-2.5 shrink-0">
+                  <button
+                    type="button"
+                    onclick="toggleMcCorrectById('${o.id}')"
+                    title="Mark as Correct Quiz Answer (+100 pts)"
+                    class="px-2 py-0.5 rounded-lg text-[11px] font-extrabold border transition cursor-pointer ${
+                      isCorr
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/40'
+                        : 'bg-slate-100 dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800 hover:text-emerald-500'
+                    }"
+                  >
+                    ${isCorr ? '✓ Correct' : 'Quiz ✓'}
+                  </button>
+                  <span class="text-xs sm:text-sm font-mono font-bold text-indigo-600 dark:text-indigo-400">${votes} votes (${pct}%)</span>
+                  ${options.length > 2 ? `<button onclick="deleteMcOptionById('${o.id}')" title="Remove option" class="text-slate-400 hover:text-rose-500 text-xs font-bold cursor-pointer">✕</button>` : ''}
+                </div>
+              </div>
+              <div class="h-4 bg-slate-200 dark:bg-slate-900 rounded-full overflow-hidden p-0.5">
+                <div class="bg-gradient-to-r ${isCorr && !s.hideResults ? 'from-emerald-500 to-teal-400' : 'from-indigo-500 to-violet-500'} h-full rounded-full transition-all duration-700" style="width: ${pct}%"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        const mcWrap = `<div class="space-y-3">${optsHTML}</div>`;
+
+        canvas.innerHTML = `
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 space-y-6 shadow-xl">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full">📊 Multiple Choice & Quiz</span>
+              <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono font-bold text-slate-500">👥 ${total} Total Vote(s)</span>
+                <button onclick="addMcOptionOnStage()" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold cursor-pointer transition shadow-sm">
+                  + Add Option
+                </button>
+              </div>
+            </div>
+            <h3 contenteditable="true" onfocus="isHostEditingInline=true" onblur="saveInlineQuestion(this.innerText)" class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white outline-none cursor-text">${slide.question}</h3>
+            <p class="text-xs text-slate-400">Tip: Click "Quiz ✓" next to any option to mark it as the correct quiz answer (+100 pts).</p>
+            ${wrapWithPrivacyBlur(mcWrap, s.hideResults, total)}
+          </div>
+        `;
+      }
+
+      // 4. OPEN ENDED STAGE
+      else if (slide.type === 'OPEN_ENDED') {
+        const responses = slide.responses || [];
+        const respHTML = responses.length > 0
+          ? responses.slice().reverse().map((r) => `
+              <div
+                onclick="spotlightItem('${slide.id}', 'OPEN_ENDED', '${r.id}')"
+                class="group anim-pop bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 rounded-2xl p-5 space-y-2 shadow-sm cursor-pointer transition"
+                title="Click to spotlight full screen"
+              >
+                <div class="flex items-center justify-between text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                  <span>${r.voterAvatar || '👤'} ${r.voterName || 'Anonymous'}</span>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-slate-400">${r.timestamp ? new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                    <button onclick="moderateItem('${slide.id}', 'OPEN_ENDED', '${r.id}', event)" title="Delete response" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 font-bold px-1">✕</button>
+                  </div>
+                </div>
+                <p class="text-sm sm:text-base font-semibold text-slate-800 dark:text-slate-100 leading-relaxed">${r.text}</p>
+              </div>
+            `).join('')
+          : '<div class="col-span-full text-center py-16 text-slate-400 text-sm">💬 Waiting for audience responses to appear here live...</div>';
+
+        const gridBox = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[440px] overflow-y-auto p-1">${respHTML}</div>`;
+
+        canvas.innerHTML = `
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 space-y-6 shadow-xl">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full">💬 Open Ended (Click any card to Spotlight)</span>
+              <span class="text-xs font-mono font-bold text-slate-500">${responses.length} Response(s)</span>
+            </div>
+            <h3 contenteditable="true" onfocus="isHostEditingInline=true" onblur="saveInlineQuestion(this.innerText)" class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white outline-none cursor-text">${slide.question}</h3>
+            ${wrapWithPrivacyBlur(gridBox, s.hideResults, responses.length)}
+          </div>
+        `;
+      }
+
+      // 5. RANKING POLL STAGE
+      else if (slide.type === 'RANKING') {
+        const items = slide.items || [];
+        const responses = slide.responses || [];
+        const total = responses.length;
+        const n = items.length;
+
+        const pointsMap = {};
+        items.forEach((it) => { pointsMap[it.id] = 0; });
+
+        responses.forEach((r) => {
+          if (Array.isArray(r.ranking)) {
+            r.ranking.forEach((itemId, pos) => {
+              const pts = Math.max(1, n - pos);
+              if (pointsMap[itemId] !== undefined) {
+                pointsMap[itemId] += pts;
+              }
+            });
+          }
+        });
+
+        const maxPossiblePoints = Math.max(1, total * n);
+
+        const sortedItems = total > 0
+          ? items.slice().sort((a, b) => (pointsMap[b.id] || 0) - (pointsMap[a.id] || 0))
+          : items;
+
+        const itemsHTML = sortedItems.map((it, idx) => {
+          const pts = pointsMap[it.id] || 0;
+          const pct = total > 0 ? Math.round((pts / maxPossiblePoints) * 100) : 0;
+          const rankBadge = idx === 0 && total > 0 ? '🥇 #1' : `#${idx + 1}`;
+          return `
+            <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center space-x-2.5 flex-grow">
+                  <span class="px-2.5 h-7 rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 font-mono text-xs font-black flex items-center justify-center shrink-0">
+                    ${rankBadge}
+                  </span>
+                  <input
+                    type="text"
+                    value="${it.text.replace(/"/g, '&quot;')}"
+                    onfocus="isHostEditingInline=true"
+                    onblur="updateRankingItemById('${it.id}', this.value)"
+                    title="Click to edit ranking item"
+                    class="font-bold text-sm sm:text-base text-slate-900 dark:text-white bg-transparent border-b border-transparent focus:border-sky-500 focus:outline-none w-full"
+                  />
+                </div>
+                <div class="flex items-center space-x-3 shrink-0">
+                  <span class="text-xs sm:text-sm font-mono font-bold text-sky-600 dark:text-sky-400">${pts} pts (${pct}%)</span>
+                  ${items.length > 2 ? `<button onclick="deleteRankingItemById('${it.id}')" title="Remove item" class="text-slate-400 hover:text-rose-500 text-xs font-bold cursor-pointer">✕</button>` : ''}
+                </div>
+              </div>
+              <div class="h-3.5 bg-slate-200 dark:bg-slate-900 rounded-full overflow-hidden p-0.5">
+                <div class="bg-gradient-to-r from-sky-500 to-indigo-500 h-full rounded-full transition-all duration-700" style="width: ${pct}%"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        const rankingWrap = `<div class="space-y-3">${itemsHTML}</div>`;
+
+        canvas.innerHTML = `
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 space-y-6 shadow-xl">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-sky-600 dark:text-sky-400 bg-sky-500/10 px-3 py-1 rounded-full">🏆 Priority Ranking Leaderboard</span>
+              <div class="flex items-center space-x-3">
+                <span class="text-xs font-mono font-bold text-slate-500">👥 ${total} Ranking(s)</span>
+                <button onclick="addRankingItemOnStage()" class="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-extrabold cursor-pointer transition shadow-sm">
+                  + Add Ranking Item
+                </button>
+              </div>
+            </div>
+            <h3 contenteditable="true" onfocus="isHostEditingInline=true" onblur="saveInlineQuestion(this.innerText)" class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white outline-none cursor-text">${slide.question}</h3>
+            <p class="text-xs text-slate-400">Tip: Click any item name below to rename it, or click "+ Add Ranking Item" to give voters more choices.</p>
+            ${wrapWithPrivacyBlur(rankingWrap, s.hideResults, total)}
+          </div>
+        `;
+      }
+
+      // 6. LIVE Q&A BOARD STAGE
+      else if (slide.type === 'QA') {
+        const questions = (slide.questions || []).slice().sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0));
+        const qHTML = questions.length > 0
+          ? questions.map((q) => `
+              <div
+                onclick="spotlightItem('${slide.id}', 'QA', '${q.id}')"
+                class="group anim-pop bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-rose-500 rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer transition"
+                title="Click to spotlight question full screen"
+              >
+                <div class="space-y-1">
+                  <div class="flex items-center space-x-2 text-[11px] font-bold text-slate-400">
+                    <span>${q.voterAvatar || '👤'} ${q.voterName || 'Anonymous'}</span>
+                    <span>•</span>
+                    <span class="font-mono">${q.timestamp ? new Date(q.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                  </div>
+                  <p class="text-sm sm:text-base font-bold text-slate-900 dark:text-white">❓ ${q.text}</p>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                  <div class="px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 font-extrabold text-sm flex items-center space-x-1.5">
+                    <span>👍</span>
+                    <span>${q.upvotes || 0}</span>
+                  </div>
+                  <button onclick="moderateItem('${slide.id}', 'QA', '${q.id}', event)" title="Delete question" class="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-rose-500 font-bold">✕</button>
+                </div>
+              </div>
+            `).join('')
+          : '<div class="text-center py-16 text-slate-400 text-sm">🙋 Waiting for audience to submit questions...</div>';
+
+        canvas.innerHTML = `
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 space-y-6 shadow-xl">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full">🙋 Live Audience Q&A (Click any question to Spotlight)</span>
+              <span class="text-xs font-mono font-bold text-slate-500">${questions.length} Question(s)</span>
+            </div>
+            <h3 contenteditable="true" onfocus="isHostEditingInline=true" onblur="saveInlineQuestion(this.innerText)" class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white outline-none cursor-text">${slide.question}</h3>
+            <div class="space-y-3 max-h-[440px] overflow-y-auto pr-1">${qHTML}</div>
+          </div>
+        `;
+      }
+    }
+
+    socket.on('session_update', (s) => {
+      if (s.hostToken) {
+        activeHostToken = s.hostToken;
+        localStorage.setItem(`prajnix_host_token_${s.pin}`, s.hostToken);
+      }
+      currentSession = s;
+      document.getElementById('stageDeckTitle').textContent = s.title;
+      document.getElementById('slideIndicator').textContent = `${s.currentSlideIndex + 1} / ${s.slides.length}`;
+
+      syncCountdownUI(s);
+
+      if (lastKnownResultsHidden === true && s.hideResults === false) {
+        blastConfetti();
+      }
+      lastKnownResultsHidden = Boolean(s.hideResults);
+
+      const pacingBtn = document.getElementById('togglePacingBtn');
+      if (s.pacingMode === 'HOST') {
+        pacingBtn.textContent = '🎯 Host-Synced';
+        pacingBtn.className = 'px-2.5 py-2 text-xs font-extrabold rounded-xl bg-indigo-600/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/40 cursor-pointer transition';
+      } else {
+        pacingBtn.textContent = '🏃 Self-Paced';
+        pacingBtn.className = 'px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition';
+      }
+
+      const hideBtn = document.getElementById('toggleHideResultsBtn');
+      if (s.hideResults) {
+        hideBtn.textContent = '✨ Reveal Results';
+        hideBtn.className = 'px-2.5 py-2 text-xs font-extrabold rounded-xl bg-amber-500 text-slate-950 shadow-md cursor-pointer transition';
+      } else {
+        hideBtn.textContent = '👁️ Hide Results';
+        hideBtn.className = 'px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition';
+      }
+
+      const sidebarList = document.getElementById('sidebarSlidesList');
+      sidebarList.innerHTML = '';
+      s.slides.forEach((sl, idx) => {
+        const isActive = idx === s.currentSlideIndex;
+        const count = sl.type === 'WORD_CLOUD'
+          ? (sl.words || []).length
+          : sl.type === 'QA'
+          ? (sl.questions || []).length
+          : (sl.responses || []).length;
+
+        sidebarList.innerHTML += `
+          <div
+            onclick="selectSlideFromSidebar(${idx})"
+            title="${SLIDE_DESCRIPTIONS[sl.type] || sl.type}"
+            class="group p-3 rounded-2xl border transition cursor-pointer flex items-start space-x-3 ${
+              isActive
+                ? 'bg-indigo-50 dark:bg-indigo-600/15 border-indigo-500 shadow-sm'
+                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-indigo-400'
+            }"
+          >
+            <div class="w-7 h-7 rounded-lg shrink-0 flex items-center justify-center font-mono text-xs font-extrabold ${
+              isActive ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+            }">${idx + 1}</div>
+            <div class="flex-grow min-w-0">
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">${sl.type.replace('_', ' ')}</span>
+              <p class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate mt-0.5">${sl.question}</p>
+              <span class="text-[10px] font-mono text-slate-400">${count} response(s)</span>
+            </div>
+            ${s.slides.length > 1 ? `<button onclick="deleteSlideFromSidebar(${idx}, event)" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500">✕</button>` : ''}
+          </div>
+        `;
+      });
+
+      const multiVoteBtn = document.getElementById('toggleMultiVoteBtn');
+      multiVoteBtn.textContent = s.allowMultipleVotes ? '🔁 Multi: ON' : '🔒 1-Vote';
+
+      const toggleBtn = document.getElementById('toggleStatusBtn');
+      const closeBtn = document.getElementById('closeVotingBtn');
+      const stageStatus = document.getElementById('stageStatus');
+
+      if (s.status === 'DRAFT') {
+        toggleBtn.textContent = '▶ Start'; closeBtn.classList.add('hidden');
+        stageStatus.textContent = 'DRAFT MODE'; stageStatus.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-500 uppercase tracking-wider';
+      } else if (s.status === 'LIVE') {
+        toggleBtn.textContent = '⏸ Pause'; closeBtn.classList.remove('hidden');
+        stageStatus.textContent = '● LIVE'; stageStatus.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 uppercase tracking-wider';
+      } else if (s.status === 'PAUSED') {
+        toggleBtn.textContent = '▶ Resume'; closeBtn.classList.remove('hidden');
+        stageStatus.textContent = '⏸ PAUSED'; stageStatus.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 uppercase tracking-wider';
+      } else if (s.status === 'CLOSED') {
+        toggleBtn.textContent = '▶ Reopen'; closeBtn.classList.add('hidden');
+        stageStatus.textContent = '🛑 CLOSED'; stageStatus.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 uppercase tracking-wider';
+      }
+
+      if (isHostEditingInline) return;
+      renderStageCanvas();
+    });
+  </script>
+</body>
+</html>

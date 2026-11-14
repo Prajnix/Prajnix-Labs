@@ -1,0 +1,103 @@
+{
+  "pin": "517614",
+  "title": "WEBINAR",
+  "status": "CLOSED",
+  "allowMultipleVotes": false,
+  "pacingMode": "HOST",
+  "hideResults": false,
+  "theme": "indigo",
+  "timerEndsAt": null,
+  "timerDuration": 0,
+  "currentSlideIndex": 1,
+  "createdAt": "2026-11-01T14:49:25.712Z",
+  "slides": [
+    {
+      "id": "slide_1793544610963_201",
+      "type": "MULTIPLE_CHOICE",
+      "question": "what is ur year of exp. ?",
+      "minLabel": "1 = Bad",
+      "maxLabel": "5 = Good",
+      "distribution": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      },
+      "options": [
+        {
+          "id": "opt_1793544610963_1",
+          "text": "0-5",
+          "votes": 0
+        },
+        {
+          "id": "opt_1793544610963_2",
+          "text": "5-10",
+          "votes": 0
+        },
+        {
+          "id": "opt_1793544610963_3",
+          "text": "10-20",
+          "votes": 1
+        },
+        {
+          "id": "opt_1793544664178_85v",
+          "text": "20+",
+          "votes": 0
+        }
+      ],
+      "items": [],
+      "responses": [
+        {
+          "id": "mc_1793544825045_w7tv",
+          "voterId": "v_3yzhufsy",
+          "voterName": "Guest",
+          "voterAvatar": "🦁",
+          "optionId": "opt_1793544610963_3",
+          "optionText": "10-20",
+          "timestamp": "2026-11-01T14:53:45.045Z"
+        }
+      ],
+      "words": [],
+      "questions": []
+    },
+    {
+      "id": "slide_1793544684061_202",
+      "type": "RATING_SLIDER",
+      "question": "How would you rate this overall?",
+      "minLabel": "1 = Bad",
+      "maxLabel": "5 = Good",
+      "distribution": {
+        "1": 0,
+        "2": 1,
+        "3": 0,
+        "4": 1,
+        "5": 0
+      },
+      "options": [],
+      "items": [],
+      "responses": [
+        {
+          "id": "rs_1793544863132_keb4",
+          "voterId": "v_3yzhufsy",
+          "voterName": "Guest",
+          "voterAvatar": "🦁",
+          "rating": 4,
+          "suggestion": "it was good",
+          "timestamp": "2026-11-01T14:54:23.132Z"
+        },
+        {
+          "id": "rs_1793544910791_v9ck",
+          "voterId": "v_3yzhufsy",
+          "voterName": "Guest",
+          "voterAvatar": "🦁",
+          "rating": 2,
+          "suggestion": "not good",
+          "timestamp": "2026-11-01T14:55:10.791Z"
+        }
+      ],
+      "words": [],
+      "questions": []
+    }
+  ]
+}
